@@ -9,14 +9,12 @@ from torchvision.datasets import CIFAR10
 
 from neurnet.cnn import LeNet, test_lenet, train_lenet
 
-torch.use_deterministic_algorithms(True)
-
 # ===-----------------------------------------------------------------------===
 # Constants
 # ===-----------------------------------------------------------------------===
 
-DATA_DIR = "./data"
-CIFAR10_CLASSES = (
+_DATA_ROOT_DIR = "./data"
+_CIFAR10_CLASSES = (
     "plane",
     "car",
     "bird",
@@ -72,6 +70,8 @@ def build_parser() -> argparse.ArgumentParser:
 # Dataloaders
 # ===-----------------------------------------------------------------------===
 
+_NORMALISE_TRANSFORM = T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
+
 
 def get_train_data(batch_size: int) -> DataLoader:
     train_transforms = T.Compose(
@@ -79,24 +79,19 @@ def get_train_data(batch_size: int) -> DataLoader:
             T.RandomHorizontalFlip(),
             T.RandomCrop(size=32, padding=4),
             T.ToTensor(),
-            T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+            _NORMALISE_TRANSFORM,
         ]
     )
     train_set = CIFAR10(
-        root=DATA_DIR, train=True, download=True, transform=train_transforms
+        root=_DATA_ROOT_DIR, train=True, download=True, transform=train_transforms
     )
     return DataLoader(train_set, batch_size=batch_size, shuffle=True)
 
 
 def get_test_data(batch_size: int) -> DataLoader:
-    test_transform = T.Compose(
-        [
-            T.ToTensor(),
-            T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
-        ]
-    )
+    test_transform = T.Compose([T.ToTensor(), _NORMALISE_TRANSFORM])
     test_set = CIFAR10(
-        root=DATA_DIR, train=False, download=True, transform=test_transform
+        root=_DATA_ROOT_DIR, train=False, download=True, transform=test_transform
     )
     return DataLoader(test_set, batch_size=batch_size, shuffle=False)
 

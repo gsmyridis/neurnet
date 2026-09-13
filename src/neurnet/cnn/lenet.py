@@ -21,9 +21,9 @@ class LeNet(SerializableTorchModel, DeserializableTorchModel):
         self.fc_2 = nn.Linear(in_features=120, out_features=84)
         self.fc_3 = nn.Linear(in_features=84, out_features=10)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         # Covolution 1 with 5 x 5 kernel
-        x = F.relu(self.cn_1(x))
+        x = F.relu(self.cn_1(input))
         # Max pooling 1 over a (2, 2) window
         x = F.max_pool2d(input=x, kernel_size=(2, 2))
         # Convolusion 2 with 5 x 5 kernel
