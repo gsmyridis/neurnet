@@ -20,15 +20,31 @@ class LeNet(SerializableTorchModel, DeserializableTorchModel):
         self.fc_2 = nn.Linear(in_features=120, out_features=84)
         self.fc_3 = nn.Linear(in_features=84, out_features=10)
 
-    def forward(self, input: Tensor) -> Tensor:
+    def _forward_features(
+        self, input: Tensor
+    ) -> tuple[Tensor, dict[str, Tensor]]:
+        feature_maps = {}
+
         # Covolution 1 with 5 x 5 kernel
         x = F.relu(self.cn_1(input))
+        feature_maps["Convolution 1"] = x
         # Max pooling 1 over a (2, 2) window
         x = F.max_pool2d(input=x, kernel_size=(2, 2))
         # Convolusion 2 with 5 x 5 kernel
         x = F.relu(self.cn_2(x))
+        feature_maps["Convolution 2"] = x
         # Max pooling 2 over a (2, 2) window
         x = F.max_pool2d(input=x, kernel_size=(2, 2))
+
+        return x, feature_maps
+
+    def extract_feature_maps(self, input: Tensor) -> dict[str, Tensor]:
+        """Return the activations produced by both convolutional layers."""
+        _, feature_maps = self._forward_features(input)
+        return feature_maps
+
+    def forward(self, input: Tensor) -> Tensor:
+        x, _ = self._forward_features(input)
 
         # Flatten spatial and depth dimension into a single vector
         x = x.view(-1, self._n_features(x))

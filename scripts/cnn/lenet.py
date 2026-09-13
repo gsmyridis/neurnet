@@ -8,6 +8,7 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10
 
 from neurnet.cnn import LeNet, test_lenet, train_lenet
+from neurnet.utils.image import show_feature_maps, show_image
 
 # ===-----------------------------------------------------------------------===
 # Constants
@@ -63,6 +64,14 @@ def build_parser() -> argparse.ArgumentParser:
     test_parser.add_argument("--batch-size", type=positive_int, default=10_000)
     test_parser.set_defaults(handler=test)
 
+    visualize_parser = subparsers.add_parser(
+        "visualize", help="Visualize LeNet's convolutional feature maps."
+    )
+    visualize_parser.add_argument("--model-path", type=Path, required=True)
+    visualize_parser.add_argument("--max-maps", type=positive_int, default=16)
+    visualize_parser.add_argument("--columns", type=positive_int, default=4)
+    visualize_parser.set_defaults(handler=visualize)
+
     return parser
 
 
@@ -97,7 +106,7 @@ def get_test_data(batch_size: int) -> DataLoader:
 
 
 # ===-----------------------------------------------------------------------===
-# Train / Test
+# Train / Test / Visualize
 # ===-----------------------------------------------------------------------===
 
 
@@ -122,6 +131,30 @@ def test(args: argparse.Namespace) -> None:
     test_loader = get_test_data(args.batch_size)
     lenet = LeNet.from_path(args.model_path)
     test_lenet(lenet, test_loader)
+
+
+def visualize(args: argparse.Namespace) -> None:
+    test_loader = get_test_data(batch_size=1)
+    lenet = LeNet.from_path(args.model_path)
+    lenet.eval()
+
+    images, labels = next(iter(test_loader))
+    image = images[0]
+    label = labels[0].item()
+    print(f"Input class: {_CIFAR10_CLASSES[label]}")
+
+    show_image(image, _NORMALISE_TRANSFORM.mean, _NORMALISE_TRANSFORM.std)
+
+    with torch.no_grad():
+        feature_maps = lenet.extract_feature_maps(image.unsqueeze(0))
+
+    for name, features in feature_maps.items():
+        show_feature_maps(
+            features,
+            max_maps=args.max_maps,
+            columns=args.columns,
+            title=name,
+        )
 
 
 # ===-----------------------------------------------------------------------===
