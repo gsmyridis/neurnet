@@ -1,7 +1,6 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
+from torch import Tensor, nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
@@ -10,7 +9,7 @@ from neurnet.utils.serde import DeserializableTorchModel, SerializableTorchModel
 
 class LeNet(SerializableTorchModel, DeserializableTorchModel):
     def __init__(self):
-        super(LeNet, self).__init__()
+        super().__init__()
 
         # Convolution layers
         self.cn_1 = nn.Conv2d(in_channels=3, out_channels=6, kernel_size=5)
