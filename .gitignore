@@ -10,5 +10,5 @@ wheels/
 .venv
 
 # Project data
-data/
-models/
+/data/
+/models/

@@ -4,7 +4,7 @@ from torch import Tensor, nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from neurnet.utils.serde import DeserializableTorchModel, SerializableTorchModel
+from neurnet.nn import DeserializableTorchModel, SerializableTorchModel
 
 
 class LeNet(SerializableTorchModel, DeserializableTorchModel):
@@ -20,9 +20,7 @@ class LeNet(SerializableTorchModel, DeserializableTorchModel):
         self.fc_2 = nn.Linear(in_features=120, out_features=84)
         self.fc_3 = nn.Linear(in_features=84, out_features=10)
 
-    def _forward_features(
-        self, input: Tensor
-    ) -> tuple[Tensor, dict[str, Tensor]]:
+    def _forward_features(self, input: Tensor) -> tuple[Tensor, dict[str, Tensor]]:
         feature_maps = {}
 
         # Covolution 1 with 5 x 5 kernel

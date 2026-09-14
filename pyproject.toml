@@ -6,10 +6,12 @@ readme = "README.md"
 authors = [
     { name = "gsmyridis", email = "georgesmyr@icloud.com" }
 ]
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 dependencies = [
     "kagglehub>=1.0.2",
     "matplotlib>=3.11.2",
+    "mlx>=0.32.2",
+    "mlx-data>=0.2.0",
     "numpy>=2.5.3",
     "ruff>=0.16.7",
     "torch>=2.14.0",

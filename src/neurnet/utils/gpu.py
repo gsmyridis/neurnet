@@ -1,7 +1,7 @@
 import torch
 
 
-def get_device(enable_tensor_cores=True) -> torch.device:
+def get_torch_device(enable_tensor_cores=True) -> torch.device:
     if torch.cuda.is_available():
         device = torch.device("cuda")
         print("Using NVIDIA CUDA GPU")

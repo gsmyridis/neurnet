@@ -1,10 +1,13 @@
 from typing import Self
 
 import torch
-from torch import nn
+
+# ===-----------------------------------------------------------------------===
+# Torch
+# ===-----------------------------------------------------------------------===
 
 
-class DeserializableTorchModel(nn.Module):
+class DeserializableTorchModel(torch.nn.Module):
     @classmethod
     def from_path(cls, path: str) -> Self:
         cached = cls()
@@ -12,6 +15,6 @@ class DeserializableTorchModel(nn.Module):
         return cached
 
 
-class SerializableTorchModel(nn.Module):
+class SerializableTorchModel(torch.nn.Module):
     def save_to(self, path: str) -> None:
         torch.save(self.state_dict(), path)

@@ -16,8 +16,8 @@ from torchvision import datasets
 from torchvision.models import AlexNet_Weights
 
 from neurnet.cnn import AlexNet
-from neurnet.utils.data import SizedDataLoader
-from neurnet.utils.gpu import get_device
+from neurnet.utils.data import SizedTorchDataLoader
+from neurnet.utils.gpu import get_torch_device
 
 # ===-----------------------------------------------------------------------===
 # Constants
@@ -84,7 +84,7 @@ def _download_dataset(path: str) -> str:
     return os.path.join(dir_path, _HYMENOPTERA_DATA)
 
 
-def get_train_data(batch_size: int) -> tuple[list[str], SizedDataLoader]:
+def get_train_data(batch_size: int) -> tuple[list[str], SizedTorchDataLoader]:
     path = _download_dataset(_DATA_DIR)
     train_set = datasets.ImageFolder(
         os.path.join(path, "train"),
@@ -92,14 +92,14 @@ def get_train_data(batch_size: int) -> tuple[list[str], SizedDataLoader]:
     )
 
     loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    return train_set.classes, SizedDataLoader(loader, len(train_set))
+    return train_set.classes, SizedTorchDataLoader(loader, len(train_set))
 
 
-def get_test_data(batch_size: int) -> tuple[list[str], SizedDataLoader]:
+def get_test_data(batch_size: int) -> tuple[list[str], SizedTorchDataLoader]:
     path = _download_dataset(_DATA_DIR)
     test_data = datasets.ImageFolder(os.path.join(path, "val"), _WEIGHTS_TRANSFORMS)
     loader = DataLoader(test_data, batch_size=batch_size, shuffle=False)
-    return test_data.classes, SizedDataLoader(loader, len(test_data))
+    return test_data.classes, SizedTorchDataLoader(loader, len(test_data))
 
 
 # ===-----------------------------------------------------------------------===
@@ -117,7 +117,7 @@ def load_modified_alexnet(n_classes: int) -> AlexNet:
 
 def evaluate_model(
     model: AlexNet,
-    data_loader: SizedDataLoader,
+    data_loader: SizedTorchDataLoader,
     loss_func: nn.Module,
     device: Device,
 ) -> tuple[float, float]:
@@ -147,8 +147,8 @@ def evaluate_model(
 
 def finetune_model(
     model: AlexNet,
-    train_loader: SizedDataLoader,
-    test_loader: SizedDataLoader,
+    train_loader: SizedTorchDataLoader,
+    test_loader: SizedTorchDataLoader,
     loss_func: nn.Module,
     optim: Optimizer,
     epochs: int,
@@ -227,7 +227,7 @@ def finetune(args: argparse.Namespace) -> None:
     if train_classes != test_classes:
         raise ValueError("training and test datasets must have the same classes")
 
-    device = get_device()
+    device = get_torch_device()
     alexnet = load_modified_alexnet(len(train_classes)).to(device)
 
     loss_func = nn.CrossEntropyLoss()
@@ -257,7 +257,7 @@ def finetune(args: argparse.Namespace) -> None:
 
 def test(args: argparse.Namespace) -> None:
     classes, test_loader = get_test_data(args.batch_size)
-    device = get_device()
+    device = get_torch_device()
 
     alexnet = AlexNet(num_classes=len(classes))
     state_dict = torch.load(args.model_path, map_location=device, weights_only=True)

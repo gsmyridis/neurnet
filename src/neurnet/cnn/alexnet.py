@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor, nn
 
-from neurnet.utils.serde import DeserializableTorchModel, SerializableTorchModel
+from neurnet.nn import DeserializableTorchModel, SerializableTorchModel
 
 
 class AlexNet(SerializableTorchModel, DeserializableTorchModel):
