@@ -3,8 +3,10 @@
 Experiments with different neural network architectures, and deep learning frameworks.
 The different frameworks that I explored are:
 
-- PyTorch
-- MLX
+| Frameworks |
+| ---------- |
+| PyTorch    |
+| MLX        |
 
 The experiments that have been carried out are:
 
