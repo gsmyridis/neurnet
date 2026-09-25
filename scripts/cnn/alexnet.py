@@ -15,7 +15,8 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.models import AlexNet_Weights
 
-from neurnet.cnn import AlexNet
+from neurnet.arch.cnn import AlexNet
+from neurnet.serde import serialize_torch_model
 from neurnet.utils.data import SizedTorchDataLoader
 from neurnet.utils.gpu import get_torch_device
 
@@ -247,7 +248,7 @@ def finetune(args: argparse.Namespace) -> None:
 
     if args.save_to is not None:
         args.save_to.parent.mkdir(parents=True, exist_ok=True)
-        finetuned_alexnet.save_to(args.save_to)
+        serialize_torch_model(finetuned_alexnet, args.save_to)
 
     time_delta = time.time() - start
     mins = time_delta // _SECS_IN_MIN

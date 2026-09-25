@@ -4,10 +4,8 @@ from torch import Tensor, nn
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 
-from neurnet.nn import DeserializableTorchModel, SerializableTorchModel
 
-
-class LeNet(SerializableTorchModel, DeserializableTorchModel):
+class LeNet(nn.Module):
     def __init__(self):
         super().__init__()
 

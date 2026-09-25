@@ -1,10 +1,8 @@
 import torch
 from torch import Tensor, nn
 
-from neurnet.nn import DeserializableTorchModel, SerializableTorchModel
 
-
-class AlexNet(SerializableTorchModel, DeserializableTorchModel):
+class AlexNet(nn.Module):
     def __init__(self, num_classes: int = 1000, dropout: float = 0.5) -> None:
         super().__init__()
         self.features = nn.Sequential(

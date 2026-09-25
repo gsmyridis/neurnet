@@ -7,7 +7,8 @@ import torchvision.transforms as T
 from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10
 
-from neurnet.cnn import LeNet, test_lenet, train_lenet
+from neurnet.arch.cnn import LeNet, test_lenet, train_lenet
+from neurnet.serde import deserialise_torch_model, serialize_torch_model
 from neurnet.utils.image import show_feature_maps, show_image
 
 # ===-----------------------------------------------------------------------===
@@ -124,18 +125,18 @@ def train(args: argparse.Namespace) -> None:
     print("Finished training.")
 
     args.save_to.parent.mkdir(parents=True, exist_ok=True)
-    lenet.save_to(args.save_to)
+    serialize_torch_model(lenet, args.save_to)
 
 
 def test(args: argparse.Namespace) -> None:
     test_loader = get_test_data(args.batch_size)
-    lenet = LeNet.from_path(args.model_path)
+    lenet = deserialise_torch_model(LeNet, args.model_path)
     test_lenet(lenet, test_loader)
 
 
 def visualize(args: argparse.Namespace) -> None:
     test_loader = get_test_data(batch_size=1)
-    lenet = LeNet.from_path(args.model_path)
+    lenet = deserialise_torch_model(LeNet, args.model_path)
     lenet.eval()
 
     images, labels = next(iter(test_loader))

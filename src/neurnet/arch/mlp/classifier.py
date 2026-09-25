@@ -5,16 +5,8 @@ import mlx.core as mx
 from mlx import nn
 from mlx.optimizers import Optimizer
 
+from neurnet.nn import Flatten
 from neurnet.utils.data import MLXDataLoader
-
-
-class Flatten(nn.Module):
-    def __init__(self, start_axis: int):
-        super().__init__()
-        self.start_axis = start_axis
-
-    def __call__(self, x: mx.array) -> mx.array:
-        return mx.flatten(x, start_axis=self.start_axis)
 
 
 class MLPClassifier(nn.Module):

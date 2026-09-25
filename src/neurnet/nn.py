@@ -1,20 +1,25 @@
-from typing import Self
-
-import torch
+import mlx.core as mx
+from mlx import nn
 
 # ===-----------------------------------------------------------------------===
-# Torch
+# MLX
 # ===-----------------------------------------------------------------------===
 
 
-class DeserializableTorchModel(torch.nn.Module):
-    @classmethod
-    def from_path(cls, path: str) -> Self:
-        cached = cls()
-        cached.load_state_dict(torch.load(path))
-        return cached
+class ModuleList(nn.Module):
+    def __init__(self, modules: list[nn.Module]):
+        self.inner = modules
+
+    def __call__(self, x: mx.array) -> mx.array:
+        for module in self.inner:
+            x = module(x)
+        return x
 
 
-class SerializableTorchModel(torch.nn.Module):
-    def save_to(self, path: str) -> None:
-        torch.save(self.state_dict(), path)
+class Flatten(nn.Module):
+    def __init__(self, start_axis: int):
+        super().__init__()
+        self.start_axis = start_axis
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return mx.flatten(x, start_axis=self.start_axis)

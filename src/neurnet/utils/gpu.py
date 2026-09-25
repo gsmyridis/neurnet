@@ -13,7 +13,7 @@ def get_torch_device(enable_tensor_cores=True) -> torch.device:
             # and https://github.com/rasbt/reasoning-from-scratch/issues/256
             if (major, minor) >= (2, 11):
                 torch.backends.cuda.matmul.fp32_precision = "tf32"
-                # torch.backends.cudnn.conv.fp32_precision = "tf32"
+                torch.backends.cudnn.conv.fp32_precision = "tf32"
             else:
                 torch.backends.cuda.matmul.allow_tf32 = True
                 torch.backends.cudnn.allow_tf32 = True

@@ -5,8 +5,8 @@ from mlx import nn
 from mlx.nn.losses import cross_entropy
 from mlx.optimizers import SGD
 
+from neurnet.arch.mlp import MLPClassifier, test_mlp_classifier, train_mlp_classifier
 from neurnet.datasets import MNISTDataset
-from neurnet.mlp import MLPClassifier, test_mlp_classifier, train_mlp_classifier
 
 
 def loss_fn(model: nn.Module, images: mx.array, labels: mx.array) -> float:
