@@ -3,10 +3,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
-from neurnet.arch.llm import traits
+from neurnet.arch.llm.types import Tokenizer
 
 
-class Qwen3Tokenizer(traits.Tokenizer):
+class Qwen3Tokenizer(Tokenizer):
     _SPECIALS: tuple[str, ...] = (
         "<|endoftext|>",
         "<|im_start|>",
@@ -28,15 +28,8 @@ class Qwen3Tokenizer(traits.Tokenizer):
     def __init__(
         self,
         tokenizer_file_path: str | Path = "tokenizer-base.json",
-        apply_chat_template: bool = False,
-        add_generation_prompt: bool = False,
-        add_thinking: bool = False,
     ) -> None:
         from tokenizers import Tokenizer
-
-        self.apply_chat_template = apply_chat_template
-        self.add_generation_prompt = add_generation_prompt
-        self.add_thinking = add_thinking
 
         tok_path = Path(tokenizer_file_path)
         if not tok_path.is_file():
@@ -61,16 +54,9 @@ class Qwen3Tokenizer(traits.Tokenizer):
         self.eos_token_id = self._special_to_id.get(self.eos_token)
 
     def encode(self, text: str) -> Sequence[int]:
-        # , chat_wrapped: bool | None = None
-        # if chat_wrapped is None:
-        #     chat_wrapped = self.apply_chat_template
-
         stripped = text.strip()
         if stripped in self._special_to_id and "\n" not in stripped:
             return [cast(int, self._special_to_id[stripped])]
-
-        # if chat_wrapped:
-        #     prompt = self._wrap_chat(prompt)
 
         ids: list[int] = []
         for part in filter(None, self._SPLIT_RE.split(text)):
@@ -82,13 +68,3 @@ class Qwen3Tokenizer(traits.Tokenizer):
 
     def decode(self, ids: Sequence[int]) -> str:
         return self._tok.decode(ids, skip_special_tokens=False)
-
-    def _wrap_chat(self, user_msg: str) -> str:
-        s = f"<|im_start|>user\n{user_msg}<|im_end|>\n"
-        if self.add_generation_prompt:
-            s += "<|im_start|>assistant"
-            if self.add_thinking:
-                s += "\n"  # insert no <think> tag, just a new line
-            else:
-                s += "\n<think>\n\n</think>\n\n"
-        return s

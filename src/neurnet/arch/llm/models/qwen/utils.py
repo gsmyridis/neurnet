@@ -27,12 +27,7 @@ def load_model_and_tokenizer(
 
         tokenizer_path = os.path.join(local_dir, "tokenizer-reasoning.json")
         model_path = os.path.join(local_dir, "qwen3-0.6B-reasoning.pth")
-        tokenizer = Qwen3Tokenizer(
-            tokenizer_file_path=tokenizer_path,
-            apply_chat_template=True,
-            add_generation_prompt=True,
-            add_thinking=True,
-        )
+        tokenizer = Qwen3Tokenizer(tokenizer_file_path=tokenizer_path)
     else:
         raise ValueError(f"Invalid choice: which_model={model_type}")
 
@@ -60,12 +55,7 @@ def load_tokenizer(
         download_qwen3_small(kind="reasoning", tokenizer_only=True, out_dir=local_dir)
 
         tokenizer_path = Path(local_dir) / "tokenizer-reasoning.json"
-        tokenizer = Qwen3Tokenizer(
-            tokenizer_file_path=tokenizer_path,
-            apply_chat_template=True,
-            add_generation_prompt=True,
-            add_thinking=True,
-        )
+        tokenizer = Qwen3Tokenizer(tokenizer_file_path=tokenizer_path)
 
     else:
         raise ValueError(f"Invalid choice: which_model={model_type}")

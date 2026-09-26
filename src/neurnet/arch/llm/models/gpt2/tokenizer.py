@@ -4,7 +4,7 @@ from typing import cast
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
-from neurnet.arch.llm.traits import Tokenizer
+from neurnet.arch.llm.types import Tokenizer
 
 from .config import GPT2ModelType
 

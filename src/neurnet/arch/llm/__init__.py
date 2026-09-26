@@ -1,8 +1,19 @@
-from .chat import ChatMessage, ChatRole
 from .config import LanguageModelConfig
+from .inference import (
+    ChatMessage,
+    ChatRole,
+    ChatSession,
+    GenerationConfig,
+    GenerationPolicy,
+    GenerationResult,
+    InferenceRuntime,
+    PromptBuilder,
+    generate_stats,
+    generate_text_stream,
+    generate_token_stream,
+)
 from .kv_cache import KVCache, KVCacheMLX, KVCacheTorch
-from .pipeline import generate_stats, generate_text_stream, generate_token_stream
-from .traits import (
+from .types import (
     LanguageModel,
     LanguageModelMLX,
     LanguageModelTorch,
@@ -13,6 +24,11 @@ from .traits import (
 __all__ = [
     "ChatMessage",
     "ChatRole",
+    "ChatSession",
+    "GenerationConfig",
+    "GenerationPolicy",
+    "GenerationResult",
+    "InferenceRuntime",
     "KVCache",
     "KVCacheMLX",
     "KVCacheTorch",
@@ -20,6 +36,7 @@ __all__ = [
     "LanguageModelConfig",
     "LanguageModelMLX",
     "LanguageModelTorch",
+    "PromptBuilder",
     "TensorType",
     "Tokenizer",
     "generate_stats",

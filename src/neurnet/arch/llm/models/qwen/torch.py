@@ -8,7 +8,7 @@ from torch import nn
 
 from neurnet.arch.llm.config import LanguageModelConfig
 from neurnet.arch.llm.kv_cache import KVCacheTorch, LayerCacheTorch
-from neurnet.arch.llm.traits import LanguageModelTorch
+from neurnet.arch.llm.types import LanguageModelTorch
 
 # ===-----------------------------------------------------------------------===
 # Config

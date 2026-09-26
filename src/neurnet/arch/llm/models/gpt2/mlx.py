@@ -9,7 +9,7 @@ from mlx import nn
 
 from neurnet.arch.llm.config import LanguageModelConfig
 from neurnet.arch.llm.kv_cache import KVCache, LayerCacheMLX
-from neurnet.arch.llm.traits import LanguageModelMLX
+from neurnet.arch.llm.types import LanguageModelMLX
 
 from .config import GPT2ModelType
 

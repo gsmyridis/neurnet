@@ -6,13 +6,13 @@ from pathlib import Path
 from typing import TypedDict
 
 import torch
-from neurnet.arch.llm.generate import generate_text_stream_concat
 
 from neurnet.arch.llm.gym.math import grade_answer
 from neurnet.arch.llm.gym.math.parse import extract_final_candidate
-from neurnet.arch.llm.models.qwen.torch import Qwen3Tokenizer, Qwen3TorchModel
+from neurnet.arch.llm.inference import generate_text_stream
+from neurnet.arch.llm.models.qwen import Qwen3Tokenizer, Qwen3TorchModel
 from neurnet.arch.llm.models.qwen.utils import load_model_and_tokenizer
-from neurnet.utils.gpu import get_torch_device
+from neurnet.device import get_torch_device
 from neurnet.utils.progress import eta_progress_message
 
 
@@ -41,7 +41,7 @@ def mini_eval_demo(
         "answer": "2/3",
     }
     prompt = render_prompt(ex["problem"])  # 1. Apply prompt template
-    gen_text = generate_text_stream_concat(  # 2. Generate response
+    gen_text = generate_text_stream(  # 2. Generate response
         model,
         tokenizer,
         prompt,
@@ -82,7 +82,7 @@ def evaluate_math500_stream(
     with open(out_path, "w", encoding="utf-8") as f:  # Save results for inspection
         for i, row in enumerate(math_data, start=1):
             prompt = render_prompt(row["problem"])  # 1. Apply prompt template
-            gen_text = generate_text_stream_concat(  # 2. Generate response
+            gen_text = generate_text_stream(  # 2. Generate response
                 model,
                 tokenizer,
                 prompt,
@@ -147,7 +147,7 @@ def main() -> None:
         r"what is the value of $a^2+b^2$?"
     )
 
-    answer = generate_text_stream_concat(model, tokenizer, prompt, device, 2048, False)
+    answer = generate_text_stream(model, tokenizer, prompt, device, 2048, False)
     print(extract_final_candidate(answer))
 
 
