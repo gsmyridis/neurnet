@@ -15,6 +15,7 @@ from neurnet.arch.llm.types import (
     Tokenizer,
 )
 from neurnet.device import Device
+from neurnet.utils.backend import Backend, get_backend
 
 from .generate import GenerationPolicy, generate_token_stream
 
@@ -54,6 +55,10 @@ class InferenceRuntime:
     @property
     def context_length(self) -> int:
         return self._context_length
+
+    def backend(self) -> Backend:
+        """Return the backend used by the loaded model."""
+        return get_backend(self._model)
 
     def set_seed(self, seed: int) -> None:
         """Seed the active backend's generator for reproducible generation."""

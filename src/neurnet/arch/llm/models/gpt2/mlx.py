@@ -1,15 +1,19 @@
 """Replication of GPT2 architecture in MLX."""
 
 import math
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Callable, Mapping
+from functools import partial
+from typing import Any, Literal, Self
 
 import mlx.core as mx
 from mlx import nn
+from mlx.optimizers import Optimizer
 
 from neurnet.arch.llm.config import LanguageModelConfig
 from neurnet.arch.llm.kv_cache import KVCache, LayerCacheMLX
 from neurnet.arch.llm.types import LanguageModelMLX
+from neurnet.nn import MLXLossFunction, normal_like
+from neurnet.utils.data import MLXDataLoader
 
 from .config import GPT2ModelType
 
@@ -29,11 +33,86 @@ class GPT2MLXModel(LanguageModelMLX):
     ) -> None:
         super().__init__()
         self._config = config
+        self._compiled_forward: Callable[[mx.array], mx.array] | None = None
+        self._compiled_cache: KVCache[mx.array] | None = None
+        self._compiled_cached_forward: Callable[[mx.array], mx.array] | None = None
 
         self.transformer = Transformer(config, embd_pdrop, attn_pdrop, resid_pdrop)
         self.lm_head = nn.Linear(config.emb_dim, config.vocab_size, bias=False)
 
+        self._initialize_parameters()
+
+        # Weight sharing scheme:
+        # GPT2, similarly to the original 'Attention is all you need' paper
+        # the token-embedding weights are shared with the language-model head
+        # weights.
+        self.transformer.wte.weight = self.lm_head.weight
+
+    def _initialize_parameters(self) -> None:
+        """Initialize parameters as in OpenAI's original GPT-2 implementation."""
+        # NOTE: Do not apply the often-seen 0.02 / sqrt(2 * n_layers) residual-projection
+        # scaling if the goal is exact OpenAI GPT-2 repository behavior;
+        # that is a later convention, not what OpenAI’s original model.py does.
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                module.weight = normal_like(module.weight, std=0.02, mean=0.0)
+                if hasattr(module, "bias") and module.bias is not None:
+                    module.bias = mx.zeros_like(module.bias)
+            elif isinstance(module, nn.Embedding):
+                module.weight = normal_like(module.weight, std=0.02, mean=0.0)
+            elif isinstance(module, nn.LayerNorm):
+                module.weight = mx.ones_like(module.weight)
+                if hasattr(module, "bias") and module.bias is not None:
+                    module.bias = mx.zeros_like(module.bias)
+
+        # GPT-2 alone uses a smaller standard deviation for position embeddings.
+        self.transformer.wpe.weight = normal_like(
+            self.transformer.wpe.weight, std=0.01, mean=0.0
+        )
+
     def __call__(
+        self,
+        indices: mx.array,
+        cache: KVCache[mx.array] | None = None,
+    ) -> mx.array:
+        if self._compiled_forward is None:
+            return self._forward(indices, cache=cache)
+
+        if cache is None:
+            return self._compiled_forward(indices)
+
+        return self._compiled_forward_for_cache(cache)(indices)
+
+    def compile(self) -> Self:
+        """Compile GPT-2 inference, including the tensor state of one KV cache.
+
+        MLX compiled functions only accept array trees and simple constants. The
+        public ``KVCache`` is a Python object, so cached decoding captures its
+        mutable list of key/value array pairs as explicit input and output state.
+        """
+        self._compiled_forward = mx.compile(self._forward)
+        self._compiled_cache = None
+        self._compiled_cached_forward = None
+        return self
+
+    def _compiled_forward_for_cache(
+        self, cache: KVCache[mx.array]
+    ) -> Callable[[mx.array], mx.array]:
+        if cache is self._compiled_cache:
+            assert self._compiled_cached_forward is not None
+            return self._compiled_cached_forward
+
+        state = [cache.cache]
+
+        @partial(mx.compile, inputs=state, outputs=state)
+        def forward(indices: mx.array) -> mx.array:
+            return self._forward(indices, cache=cache)
+
+        self._compiled_cache = cache
+        self._compiled_cached_forward = forward
+        return forward
+
+    def _forward(
         self,
         indices: mx.array,
         cache: KVCache[mx.array] | None = None,
@@ -58,9 +137,7 @@ class GPT2MLXModel(LanguageModelMLX):
         assert config.context_length == 1024, "context length is always 1,024 for GPT2"
 
         model = cls(config)
-        model_hf = GPT2LMHeadModel.from_pretrained(
-            model_type.value, cache_dir=cache_dir
-        )
+        model_hf = GPT2LMHeadModel.from_pretrained(str(model_type), cache_dir=cache_dir)
         model._load_hugging_face_weights(model_hf.state_dict())
         model.eval()
 
@@ -323,5 +400,58 @@ class FeedForward(nn.Module):
 # ===---------------------------------------------------------------------------===
 
 
-def train_gpt2(model: GPT2MLXModel):
-    pass
+def train_gpt2(
+    model: GPT2MLXModel,
+    dataloader: MLXDataLoader,
+    optimizer: Optimizer,
+    loss_fn: MLXLossFunction,
+    epochs: int = 50,
+    verbose: bool = True,
+) -> GPT2MLXModel:
+
+    def loss_fn_inner(m: nn.Module, ins: mx.array, targs: mx.array) -> mx.array:
+        logits = m(ins)  # (batch-size, token-sequence-length, vocab-size)
+        loss = mx.mean(loss_fn(logits, targs))
+        return loss
+
+    loss_and_grad_fn = nn.value_and_grad(model, loss_fn_inner)
+
+    for e in range(epochs):
+        dataloader.reset()
+        model.train()
+
+        for inputs, targets in dataloader:
+            _, grads = loss_and_grad_fn(model, inputs, targets)
+            optimizer.update(model, grads)
+            mx.eval(model.parameters(), optimizer.state)
+
+        if verbose:
+            epoch_loss = evaluate_gpt2(model, dataloader, loss_fn)
+            print(f"[Epoch {e + 1} / {epochs}]: Loss {epoch_loss.item():.4f}")
+
+    dataloader.reset()
+
+    return model
+
+
+def evaluate_gpt2(
+    model: GPT2MLXModel, dataloader: MLXDataLoader, loss_fn: MLXLossFunction
+) -> mx.array:
+    total_loss = mx.array(0.0)
+    total_tokens = 0
+
+    model.eval()
+    dataloader.reset()
+
+    for inputs, targets in dataloader:
+        logits = model(inputs)
+        losses = loss_fn(logits, targets)
+        total_loss += mx.sum(losses)
+        total_tokens += targets.size
+
+    dataloader.reset()
+
+    if total_tokens == 0:
+        raise ValueError("cannot evaluate an empty dataloader.")
+
+    return total_loss / total_tokens

@@ -20,6 +20,9 @@ class GPT2ModelType(Enum):
             case GPT2ModelType.XL:
                 return GPT2_CONFIG_1558M
 
+    def __str__(self) -> str:
+        return self.value
+
 
 GPT2_CONFIG_124M = LanguageModelConfig(
     vocab_size=50_257,

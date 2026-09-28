@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import warnings
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -12,8 +11,9 @@ from neurnet.arch.llm.models.qwen import load_model_and_tokenizer
 from neurnet.arch.llm.types import Tokenizer
 from neurnet.device import Device
 
-GPT2_MODEL_CHOICES = tuple(model_type.value for model_type in GPT2ModelType)
-MODEL_CHOICES = ("qwen3", *GPT2_MODEL_CHOICES)
+GPT2_MODEL_CHOICES = tuple(str(model_type) for model_type in GPT2ModelType)
+QWEN_MODEL_CHOICES = ("qwen3",)
+MODEL_CHOICES = (*QWEN_MODEL_CHOICES, *GPT2_MODEL_CHOICES)
 
 
 def load_model_runtime(
@@ -25,7 +25,7 @@ def load_model_runtime(
     models_dir: Path = Path("models"),
 ) -> InferenceRuntime:
     """Load a supported model behind the common inference runtime."""
-    if model_name == "qwen3":
+    if model_name in QWEN_MODEL_CHOICES:
         model_type = "reasoning" if reasoning else "base"
         model, tokenizer = load_model_and_tokenizer(
             model_type,
@@ -46,16 +46,13 @@ def load_model_runtime(
     if model_name in GPT2_MODEL_CHOICES:
         if reasoning:
             raise ValueError("--reasoning is only supported by --model qwen3")
-        if compile:
-            warnings.warn(
-                f"--compile is ignored for --model={model_name}; GPT-2 uses MLX.",
-                stacklevel=2,
-            )
 
         mx.set_default_device(device.to_mlx())
         model_type = GPT2ModelType(model_name)
         model_dir = models_dir / "gpt2"
         model = GPT2MLXModel.from_pretrained(model_type, cache_dir=str(model_dir))
+        if compile:
+            model.compile()
         tokenizer = GPT2Tokenizer.from_pretrained(model_type, cache_dir=str(model_dir))
         return InferenceRuntime(
             model,

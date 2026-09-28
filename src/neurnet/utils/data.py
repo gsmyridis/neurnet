@@ -7,6 +7,7 @@ from typing import Self
 
 import mlx.core as mx
 import torch
+from mlx.data import Stream
 
 # ===-----------------------------------------------------------------------===
 # Dataset
@@ -39,8 +40,11 @@ class MLXDataLoader(Iterator, Iterable):
     def __next__(self) -> tuple[mx.array, mx.array]:
         raise NotImplementedError("'__next__' has not been implemented.")
 
+    def stream(self) -> Stream:
+        raise NotImplementedError("'stream' has not been implemented.")
+
     def reset(self) -> None:
-        raise NotImplementedError("'reset' has not been implemented.")
+        self.stream().reset()
 
 
 # ===-----------------------------------------------------------------------===

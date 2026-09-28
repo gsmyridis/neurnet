@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Self
 
 import mlx.core as mx
 from mlx.data.datasets import load_mnist
@@ -51,9 +50,6 @@ class MNISTMLXDataLoader(MLXDataLoader):
             .batch(batch_size)
             .prefetch(prefetch_batches, prefetch_worker_threads)
         )
-
-    def __iter__(self) -> Self:
-        return self
 
     def __next__(self) -> tuple[mx.array, mx.array]:
         next_sample = next(self._stream)

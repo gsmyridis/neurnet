@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import torch
 
@@ -37,7 +37,7 @@ def load_model_and_tokenizer(
     model.to(device)
 
     if use_compile:
-        model = cast(Qwen3TorchModel, torch.compile(model))
+        model.compile()
 
     return model, tokenizer
 

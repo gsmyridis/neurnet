@@ -16,21 +16,24 @@ class DeviceType(Enum):
     def from_string(cls, string: str) -> Self:
         return cls(string.lower())
 
+    def __str__(self) -> str:
+        return self.value
+
 
 @dataclass(frozen=True)
 class Device:
     dtype: DeviceType
 
     @classmethod
-    def cpu(cls):
+    def cpu(cls) -> Self:
         return cls(DeviceType.CPU)
 
     @classmethod
-    def gpu(cls):
+    def gpu(cls) -> Self:
         return cls(DeviceType.GPU)
 
     @classmethod
-    def available(cls):
+    def available(cls) -> Self:
         if is_torch_gpu_available():
             return cls.gpu()
         return cls.cpu()

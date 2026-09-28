@@ -16,7 +16,7 @@ from neurnet.arch.llm.inference import (
 from neurnet.device import Device, DeviceType
 from scripts.llm.models import MODEL_CHOICES, load_model_runtime
 
-DEVICE_CHOICES = [device_type.value for device_type in DeviceType]
+DEVICE_CHOICES = [str(device_type) for device_type in DeviceType]
 DEFAULT_MAX_NEW_TOKENS = 64
 
 
@@ -128,7 +128,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--device",
         choices=DEVICE_CHOICES,
-        default=DeviceType.CPU.value,
+        default=str(DeviceType.CPU),
         help="Requested device. 'gpu' selects the backend's available GPU.",
     )
     parser.add_argument(
@@ -169,7 +169,7 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Print the completion for every trial after the summary.",
     )
-    parser.add_argument("--compile", action="store_true", help="Compile Torch models.")
+    parser.add_argument("--compile", action="store_true", help="Compile the model.")
     parser.add_argument(
         "--reasoning", action="store_true", help="Use Qwen reasoning model variant."
     )

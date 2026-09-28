@@ -5,7 +5,7 @@ from .config import (
     GPT2_CONFIG_1558M,
     GPT2ModelType,
 )
-from .mlx import GPT2MLXModel
+from .mlx import GPT2MLXModel, evaluate_gpt2, train_gpt2
 from .tokenizer import GPT2Tokenizer
 
 __all__ = [
@@ -16,4 +16,6 @@ __all__ = [
     "GPT2MLXModel",
     "GPT2ModelType",
     "GPT2Tokenizer",
+    "evaluate_gpt2",
+    "train_gpt2",
 ]

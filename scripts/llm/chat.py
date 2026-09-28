@@ -14,11 +14,11 @@ from neurnet.arch.llm.inference import (
     PromptBuilder,
 )
 from neurnet.device import Device, DeviceType
-from scripts.llm.models import MODEL_CHOICES, load_model_runtime
+from scripts.llm.models import MODEL_CHOICES, QWEN_MODEL_CHOICES, load_model_runtime
 
 PromptFormat = Literal["qwen", "plain"]
 
-DEVICE_CHOICES = [device_type.value for device_type in DeviceType]
+DEVICE_CHOICES = [str(device_type) for device_type in DeviceType]
 PROMPT_FORMAT_CHOICES: list[PromptFormat] = ["qwen", "plain"]
 
 
@@ -36,7 +36,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--device",
         choices=DEVICE_CHOICES,
-        default=DeviceType.CPU.value,
+        default=str(DeviceType.CPU),
         help="Requested device. 'gpu' selects the backend's available GPU.",
     )
     parser.add_argument(
@@ -87,7 +87,7 @@ def parse_arguments() -> argparse.Namespace:
         default=None,
         help="Prompt format. Defaults to Qwen for Qwen and plain for GPT-2.",
     )
-    parser.add_argument("--compile", action="store_true", help="Compile Torch model.")
+    parser.add_argument("--compile", action="store_true", help="Compile the model.")
     parser.add_argument(
         "--reasoning", action="store_true", help="Use Qwen reasoning model variant."
     )
@@ -134,7 +134,9 @@ def _generation_config_from_args(args: argparse.Namespace) -> GenerationConfig:
 def _select_prompt_builder(
     model_name: str, prompt_format: PromptFormat | None
 ) -> PromptBuilder:
-    selected_format = prompt_format or ("qwen" if model_name == "qwen3" else "plain")
+    selected_format = prompt_format or (
+        "qwen" if model_name in QWEN_MODEL_CHOICES else "plain"
+    )
     match selected_format:
         case "qwen":
             return _build_qwen_prompt
@@ -144,7 +146,7 @@ def _select_prompt_builder(
 
 def _build_qwen_prompt(history: Sequence[ChatMessage]) -> str:
     parts = [
-        f"<|im_start|>{message.role.value}\n{message.content}<|im_end|>\n"
+        f"<|im_start|>{message.role}\n{message.content}<|im_end|>\n"
         for message in history
     ]
     parts.append("<|im_start|>assistant\n")
@@ -162,15 +164,14 @@ def _print_preamble(
     session: ChatSession,
     device: Device,
 ) -> None:
-    backend_name = "torch" if args.model == "qwen3" else "mlx"
     print()
     print("=" * 60)
     print(f"model     : {args.model}")
-    print(f"backend   : {backend_name}")
-    print(f"device    : {device.dtype.value}")
+    print(f"backend   : {runtime.backend()}")
+    print(f"device    : {device.dtype}")
     print(f"cache     : {session.generation_config.use_kv_cache}")
-    print(f"compile   : {args.compile and args.model == 'qwen3'}")
-    if args.model == "qwen3":
+    print(f"compile   : {args.compile}")
+    if args.model in QWEN_MODEL_CHOICES:
         print(f"reasoning : {args.reasoning}")
     print("memory    : True")
     print(f"max_new_tokens (per turn): {session.generation_config.max_new_tokens}")

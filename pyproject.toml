@@ -14,6 +14,7 @@ dependencies = [
     "mlx-data>=0.2.0",
     "numpy>=2.5.3",
     "ruff>=0.16.7",
+    "tiktoken>=0.14.0",
     "tokenizers>=0.23.2",
     "torch>=2.14.0",
     "torchvision>=0.29.0",
