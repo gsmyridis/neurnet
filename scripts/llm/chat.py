@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Literal
 
 from neurnet.arch.llm.inference import (
@@ -14,7 +15,13 @@ from neurnet.arch.llm.inference import (
     PromptBuilder,
 )
 from neurnet.device import Device, DeviceType
-from scripts.llm.models import MODEL_CHOICES, QWEN_MODEL_CHOICES, load_model_runtime
+from scripts.llm.models import (
+    GPT2_MODEL_CHOICES,
+    MODEL_CHOICES,
+    QWEN_MODEL_CHOICES,
+    load_model_runtime,
+    resolve_model_name,
+)
 
 PromptFormat = Literal["qwen", "plain"]
 
@@ -30,8 +37,20 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         choices=MODEL_CHOICES,
-        default="qwen3",
-        help="Model to chat with.",
+        default=None,
+        help="Model architecture. Defaults to qwen3, gpt2 for a local checkpoint, "
+        "or the selected Hugging Face variant.",
+    )
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument(
+        "--checkpoint-path",
+        type=Path,
+        help="Local GPT-2 MLX weights (.safetensors or .npz); --model selects their size.",
+    )
+    source.add_argument(
+        "--hugging-face",
+        choices=GPT2_MODEL_CHOICES,
+        help="Load a Hugging Face GPT-2 variant; --model can be omitted.",
     )
     parser.add_argument(
         "--device",
@@ -93,7 +112,23 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Use the chat-trained Qwen reasoning checkpoint.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    try:
+        args.model = resolve_model_name(
+            args.model,
+            checkpoint_path=args.checkpoint_path,
+            hugging_face=args.hugging_face,
+            reasoning=args.reasoning,
+        )
+    except ValueError as error:
+        parser.error(str(error))
+    if args.checkpoint_path is not None:
+        args.checkpoint_path = args.checkpoint_path.expanduser()
+        if args.checkpoint_path.suffix not in (".safetensors", ".npz"):
+            parser.error("--checkpoint-path must end with '.safetensors' or '.npz'")
+        if not args.checkpoint_path.is_file():
+            parser.error(f"checkpoint file not found: {args.checkpoint_path}")
+    return args
 
 
 def main() -> None:
@@ -105,6 +140,8 @@ def main() -> None:
         device,
         compile=args.compile,
         reasoning=args.reasoning,
+        checkpoint_path=args.checkpoint_path,
+        hugging_face=args.hugging_face,
     )
     session = ChatSession(
         runtime,
@@ -171,6 +208,10 @@ def _print_preamble(
     print()
     print("=" * 60)
     print(f"model     : {args.model}")
+    if args.checkpoint_path is not None:
+        print(f"checkpoint: {args.checkpoint_path}")
+    elif args.model in GPT2_MODEL_CHOICES:
+        print(f"source    : Hugging Face ({args.hugging_face or args.model})")
     print(f"backend   : {runtime.backend()}")
     print(f"device    : {device.dtype}")
     print(f"cache     : {session.generation_config.use_kv_cache}")

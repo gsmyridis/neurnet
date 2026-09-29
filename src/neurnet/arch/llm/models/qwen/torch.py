@@ -104,7 +104,7 @@ class Qwen3TorchModel(LanguageModelTorch):
         """Compile only the stable-shape decoder; prefill remains eager."""
         self._compiled_decode = torch.compile(self._decode_one, *args, **kwargs)
 
-    def make_kv_cache(
+    def create_kv_cache(
         self, batch_size: int, max_length: int, device: torch.device
     ) -> KVCacheTorch:
         capacity = fixed_cache_capacity(max_length, self.cfg.context_length)
@@ -117,11 +117,6 @@ class Qwen3TorchModel(LanguageModelTorch):
             dtype=self.tok_emb.weight.dtype,
             device=device,
         )
-
-    def create_kv_cache(
-        self, batch_size: int, max_length: int, device: torch.device
-    ) -> KVCacheTorch:
-        return self.make_kv_cache(batch_size, max_length, device)
 
     def _prefill_fixed_cache(
         self, idx: torch.Tensor, cache: KVCacheTorch

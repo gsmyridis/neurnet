@@ -202,6 +202,7 @@ class ChatTests(unittest.TestCase):
             args = chat_script.parse_arguments()
 
         self.assertEqual(args.device, "cpu")
+        self.assertEqual(args.model, "qwen3")
 
     def test_parse_arguments_accepts_prompt_format_choice(self) -> None:
         with mock.patch.object(

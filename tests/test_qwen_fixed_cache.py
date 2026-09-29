@@ -37,7 +37,7 @@ class QwenFixedCacheTests(unittest.TestCase):
             prefix = torch.cat((prefix, torch.tensor([[token]])), dim=1)
             expected.append(self.model(prefix)[:, -1:])
 
-        fixed = self.model.make_kv_cache(1, 8, torch.device("cpu"))
+        fixed = self.model.create_kv_cache(1, 8, torch.device("cpu"))
         self.assertIsInstance(fixed, KVCacheTorch)
         self.assertEqual(fixed.capacity, self.model.cfg.context_length)
         actual = [self.model(self.prompt, fixed)]
@@ -51,7 +51,7 @@ class QwenFixedCacheTests(unittest.TestCase):
 
     @torch.inference_mode()
     def test_reset_reuses_allocation_without_stale_tokens(self) -> None:
-        fixed = self.model.make_kv_cache(1, 8, torch.device("cpu"))
+        fixed = self.model.create_kv_cache(1, 8, torch.device("cpu"))
         first = self.model(self.prompt, fixed)
         self.model(torch.tensor([[4]]), fixed)
         storage = fixed.layers[0][0]
@@ -65,9 +65,9 @@ class QwenFixedCacheTests(unittest.TestCase):
     @torch.inference_mode()
     def test_context_limit_is_checked(self) -> None:
         with self.assertRaisesRegex(ValueError, "context length"):
-            self.model.make_kv_cache(1, 17, torch.device("cpu"))
+            self.model.create_kv_cache(1, 17, torch.device("cpu"))
 
-        fixed = self.model.make_kv_cache(1, 16, torch.device("cpu"))
+        fixed = self.model.create_kv_cache(1, 16, torch.device("cpu"))
         self.model(torch.zeros((1, 16), dtype=torch.long), fixed)
         with self.assertRaisesRegex(ValueError, "context length"):
             self.model(torch.tensor([[1]]), fixed)
@@ -82,7 +82,7 @@ class QwenFixedCacheTests(unittest.TestCase):
             return graph.forward
 
         self.assertIsNone(self.model.compile(backend=counting_backend, fullgraph=True))
-        fixed = self.model.make_kv_cache(1, 8, torch.device("cpu"))
+        fixed = self.model.create_kv_cache(1, 8, torch.device("cpu"))
         self.model(self.prompt, fixed)
         for token in self.continuation:
             self.model(torch.tensor([[token]]), fixed)
@@ -92,7 +92,7 @@ class QwenFixedCacheTests(unittest.TestCase):
     @torch.inference_mode()
     def test_cache_dtype_tracks_model_conversion(self) -> None:
         model = Qwen3TorchModel(tiny_config()).float().eval()
-        fixed = model.make_kv_cache(1, 8, torch.device("cpu"))
+        fixed = model.create_kv_cache(1, 8, torch.device("cpu"))
         self.assertEqual(fixed.layers[0][0].dtype, torch.float32)
         model(self.prompt, fixed)
         logits = model(torch.tensor([[4]]), fixed)

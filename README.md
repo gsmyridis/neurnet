@@ -51,6 +51,21 @@ uv run -m scripts.llm.chat
 
 Append `--help` to view the available models and generation options.
 
+Chat with locally trained GPT-2 weights or an explicit Hugging Face variant:
+
+```bash
+uv run -m scripts.llm.chat --model gpt2 --checkpoint-path models/gpt2/shakespeare.safetensors --device gpu
+uv run -m scripts.llm.chat --hugging-face gpt2-medium --device gpu
+```
+
+`--checkpoint-path` and `--hugging-face` are mutually exclusive. `--model`
+selects the local checkpoint's architecture, defaulting to GPT-2 124M when
+omitted. With `--hugging-face`, the model is inferred from the named variant;
+an explicit `--model` must match it. Supported variants are `gpt2`,
+`gpt2-medium`, `gpt2-large`, and `gpt2-xl`. Local weights must be native MLX
+`.safetensors` or `.npz` files and retain their saved precision. Existing
+`--model` commands keep their default pretrained source, including Qwen3.
+
 ### GPT-2 training
 
 ```bash
@@ -77,6 +92,17 @@ Add `--save-path models/gpt2/shakespeare.safetensors` to save the model weights
 after training. Both `.safetensors` and `.npz` are supported, and parent
 directories are created automatically. This saves model weights only, without
 optimizer state. Omit the option to skip saving.
+
+Use the chat CLI above for generation. Inspect GPT-2 parameters separately with:
+
+```bash
+uv run -m scripts.llm.gpt2.pretrained --checkpoint-path models/gpt2/shakespeare.safetensors
+uv run -m scripts.llm.gpt2.pretrained --hugging-face gpt2 --explore-parameters
+```
+
+The inspection script prints weight shapes by default. `--explore-parameters`
+plots positional embeddings; add `--print-state` to do both. For local weights
+from a larger GPT-2 model, pass the matching `--model-type`.
 
 GPT-2 and Qwen3 inference use backend-specific, fixed-capacity KV caches.
 Prefill runs once; single-token decoding updates the allocated cache without

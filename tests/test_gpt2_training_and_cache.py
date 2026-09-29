@@ -165,7 +165,7 @@ class GPT2TrainingAndCacheTests(unittest.TestCase):
         compiled.update(eager.parameters())
         compiled.compile()
 
-        fixed = compiled.make_kv_cache(batch_size=1, max_length=8)
+        fixed = compiled.create_kv_cache(batch_size=1, max_length=8)
         self.assertIsInstance(fixed, KVCacheMLX)
         prefix = mx.array([[]], dtype=mx.int32)
         for token_ids in ([[1, 2]], [[3]], [[4]], [[5]], [[6]]):
@@ -184,7 +184,7 @@ class GPT2TrainingAndCacheTests(unittest.TestCase):
         mx.eval(actual, expected)
         self.assertTrue(bool(mx.allclose(actual, expected, atol=1e-5)))
 
-        fresh_cache = compiled.make_kv_cache(batch_size=1, max_length=8)
+        fresh_cache = compiled.create_kv_cache(batch_size=1, max_length=8)
         fresh = compiled(tokens, cache=fresh_cache)
         mx.eval(fresh)
         self.assertTrue(bool(mx.allclose(fresh, expected, atol=1e-5)))
@@ -246,7 +246,7 @@ class GPT2TrainingAndCacheTests(unittest.TestCase):
 
     def test_fixed_cache_enforces_context_limit(self) -> None:
         model = GPT2MLXModel(small_config()).eval().compile()
-        cache = model.make_kv_cache(batch_size=1, max_length=8)
+        cache = model.create_kv_cache(batch_size=1, max_length=8)
         model(mx.array([[1] * 8]), cache=cache)
         with self.assertRaisesRegex(ValueError, "context length exceeded"):
             model(mx.array([[2]]), cache=cache)

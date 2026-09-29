@@ -3,6 +3,7 @@
 import math
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sized
 from functools import partial
+from pathlib import Path
 from time import perf_counter
 from typing import Any, Self
 
@@ -18,7 +19,7 @@ from neurnet.arch.llm.types import LanguageModelMLX
 from neurnet.nn import MLXLossFunction, normal_like
 from neurnet.utils.data import MLXDataLoader
 
-from .config import GPT2ModelType
+from .config import GPT2_CONFIG_124M, GPT2ModelType
 
 # ===---------------------------------------------------------------------------===
 # GPT2 Model
@@ -106,7 +107,7 @@ class GPT2MLXModel(LanguageModelMLX):
         self._compiled_decode = mx.compile(self._decode_one)
         return self
 
-    def make_kv_cache(self, batch_size: int, max_length: int) -> KVCacheMLX:
+    def create_kv_cache(self, batch_size: int, max_length: int) -> KVCacheMLX:
         capacity = fixed_cache_capacity(max_length, self._config.context_length)
         return KVCacheMLX(
             n_layers=self._config.n_layers,
@@ -116,9 +117,6 @@ class GPT2MLXModel(LanguageModelMLX):
             capacity=capacity,
             dtype=self.transformer.wte.weight.dtype,
         )
-
-    def create_kv_cache(self, batch_size: int, max_length: int) -> KVCacheMLX:
-        return self.make_kv_cache(batch_size, max_length)
 
     def _prefill_cache(self, indices: mx.array, cache: KVCacheMLX) -> mx.array:
         if indices.shape[1] > cache.capacity:
@@ -146,6 +144,34 @@ class GPT2MLXModel(LanguageModelMLX):
 
     def config(self) -> LanguageModelConfig:
         return self._config
+
+    # ===-------------------------------------------------------------------===
+    # Load model
+    # ===-------------------------------------------------------------------===
+
+    @classmethod
+    def from_checkpoint(
+        cls,
+        checkpoint_path: str | Path,
+        config: LanguageModelConfig = GPT2_CONFIG_124M,
+    ) -> Self:
+        """Load native MLX weights in evaluation mode, preserving their dtype.
+
+        Accepts ``.safetensors`` and ``.npz`` files written by ``save_weights``.
+        Weight-only checkpoints require the matching architecture configuration;
+        the default matches the 124M model used by the training script.
+        """
+        path = Path(checkpoint_path).expanduser()
+        if path.suffix not in (".safetensors", ".npz"):
+            raise ValueError("checkpoint path must end with '.safetensors' or '.npz'")
+        if not path.is_file():
+            raise FileNotFoundError(f"checkpoint file not found: {path}")
+
+        model = cls(config)
+        model.load_weights(str(path), strict=True)
+        model.transformer.wte.weight = model.lm_head.weight
+        model.eval()
+        return model
 
     @classmethod
     def from_pretrained(

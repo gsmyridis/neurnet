@@ -1,4 +1,7 @@
+import tempfile
 import unittest
+from dataclasses import replace
+from pathlib import Path
 
 import mlx.core as mx
 import numpy as np
@@ -50,6 +53,35 @@ class CausalSelfAttentionTests(unittest.TestCase):
 
 
 class GPT2Tests(unittest.TestCase):
+    def test_loads_local_checkpoint_preserving_precision_and_tied_weights(self) -> None:
+        tokens = mx.array([[1, 2, 3]])
+        for dtype in (mx.float32, mx.bfloat16):
+            for extension in ("safetensors", "npz"):
+                with self.subTest(dtype=dtype, extension=extension):
+                    model = GPT2MLXModel(_test_config()).eval()
+                    model.set_dtype(dtype)
+                    model.transformer.wte.weight = model.lm_head.weight
+                    expected = model(tokens)
+                    mx.eval(expected)
+
+                    with tempfile.TemporaryDirectory() as directory:
+                        path = Path(directory) / f"model.{extension}"
+                        model.save_weights(str(path))
+                        restored = GPT2MLXModel.from_checkpoint(path, _test_config())
+                        with self.assertRaises(ValueError):
+                            GPT2MLXModel.from_checkpoint(
+                                path, replace(_test_config(), n_layers=3)
+                            )
+
+                    actual = restored(tokens)
+                    mx.eval(actual)
+                    self.assertFalse(restored.training)
+                    self.assertEqual(restored.lm_head.weight.dtype, dtype)
+                    self.assertIs(
+                        restored.transformer.wte.weight, restored.lm_head.weight
+                    )
+                    self.assertTrue(bool(mx.array_equal(expected, actual)))
+
     def test_loads_hugging_face_state_dict(self) -> None:
         torch.manual_seed(0)
         hf_config = GPT2Config(
@@ -100,7 +132,7 @@ class GPT2Tests(unittest.TestCase):
     def test_cached_forward_matches_uncached_forward(self) -> None:
         model = GPT2MLXModel(_test_config())
         model.eval()
-        cache = model.make_kv_cache(batch_size=1, max_length=4)
+        cache = model.create_kv_cache(batch_size=1, max_length=4)
 
         model(mx.array([[1, 2, 3]]), cache=cache)
         cached_logits = model(mx.array([[4]]), cache=cache)
