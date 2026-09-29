@@ -6,7 +6,7 @@ import mlx.nn
 import torch
 
 from neurnet.arch.llm.config import LanguageModelConfig
-from neurnet.arch.llm.kv_cache import KVCache
+from neurnet.arch.llm.kv_cache import KVCacheMLX, KVCacheTorch
 
 type LanguageModel = LanguageModelTorch | LanguageModelMLX
 type TensorType = torch.Tensor | mx.array
@@ -25,7 +25,7 @@ class Tokenizer(ABC):
 class LanguageModelTorch(torch.nn.Module, ABC):
     @abstractmethod
     def forward(
-        self, idx: torch.Tensor, cache: KVCache[torch.Tensor] | None = None
+        self, idx: torch.Tensor, cache: KVCacheTorch | None = None
     ) -> torch.Tensor:
         raise NotImplementedError("'forward' is not implemented")
 
@@ -38,15 +38,15 @@ class LanguageModelTorch(torch.nn.Module, ABC):
         if not isinstance(tensor, torch.Tensor):
             raise TypeError("tensor type must be 'torch.Tensor'")
 
-    def reset_kv_cache(self) -> None:
-        pass
+    def create_kv_cache(
+        self, batch_size: int, max_length: int, device: torch.device
+    ) -> KVCacheTorch:
+        raise NotImplementedError("this model has no fixed Torch KV cache")
 
 
 class LanguageModelMLX(ABC, mlx.nn.Module):
     @abstractmethod
-    def __call__(
-        self, idx: mx.array, cache: KVCache[mx.array] | None = None
-    ) -> mx.array:
+    def __call__(self, idx: mx.array, cache: KVCacheMLX | None = None) -> mx.array:
         return self(idx)
 
     @abstractmethod
@@ -58,5 +58,5 @@ class LanguageModelMLX(ABC, mlx.nn.Module):
         if not isinstance(tensor, mx.array):
             raise TypeError("tensor type must be 'mx.array'")
 
-    def reset_kv_cache(self) -> None:
-        pass
+    def create_kv_cache(self, batch_size: int, max_length: int) -> KVCacheMLX:
+        raise NotImplementedError("this model has no fixed MLX KV cache")

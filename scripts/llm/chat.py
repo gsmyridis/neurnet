@@ -89,7 +89,9 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--compile", action="store_true", help="Compile the model.")
     parser.add_argument(
-        "--reasoning", action="store_true", help="Use Qwen reasoning model variant."
+        "--reasoning",
+        action="store_true",
+        help="Use the chat-trained Qwen reasoning checkpoint.",
     )
     return parser.parse_args()
 
@@ -106,7 +108,9 @@ def main() -> None:
     )
     session = ChatSession(
         runtime,
-        prompt_builder=_select_prompt_builder(args.model, args.prompt_format),
+        prompt_builder=_select_prompt_builder(
+            args.model, args.prompt_format, reasoning=args.reasoning
+        ),
         generation_config=generation_config,
     )
 
@@ -132,10 +136,10 @@ def _generation_config_from_args(args: argparse.Namespace) -> GenerationConfig:
 
 
 def _select_prompt_builder(
-    model_name: str, prompt_format: PromptFormat | None
+    model_name: str, prompt_format: PromptFormat | None, *, reasoning: bool = False
 ) -> PromptBuilder:
     selected_format = prompt_format or (
-        "qwen" if model_name in QWEN_MODEL_CHOICES else "plain"
+        "qwen" if model_name in QWEN_MODEL_CHOICES and reasoning else "plain"
     )
     match selected_format:
         case "qwen":
@@ -173,6 +177,8 @@ def _print_preamble(
     print(f"compile   : {args.compile}")
     if args.model in QWEN_MODEL_CHOICES:
         print(f"reasoning : {args.reasoning}")
+        if not args.reasoning:
+            print("checkpoint: base text model; use --reasoning for chat")
     print("memory    : True")
     print(f"max_new_tokens (per turn): {session.generation_config.max_new_tokens}")
     policy = session.generation_config.policy

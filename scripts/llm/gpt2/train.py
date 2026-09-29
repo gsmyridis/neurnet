@@ -1,8 +1,9 @@
 import argparse
 import os
+from collections.abc import Callable
+from functools import partial
 from itertools import islice
 from time import perf_counter_ns
-from typing import cast
 
 import mlx.core as mx
 import mlx.optimizers as optim
@@ -13,7 +14,7 @@ from neurnet.arch.llm.models.gpt2 import (
     GPT2MLXModel,
     GPT2ModelType,
     GPT2Tokenizer,
-    evaluate_gpt2,
+    make_gpt2_train_step,
     train_gpt2,
 )
 from neurnet.arch.llm.types import Tokenizer
@@ -30,12 +31,13 @@ HEADER_WIDTH = 120
 def build_parser() -> argparse.ArgumentParser:
     DEFAULT_SEQUENCE_LENGTH = 256
     DEFAULT_BATCH_SIZE: int | None = None
-    DEFAULT_BATCH_SIZE_TUNING_TRAINING_STEPS = 100
+    DEFAULT_BATCH_SIZE_TUNING_TRAINING_STEPS = 10
     DEFAULT_BATCH_SIZE_TUNING_MAX_EXPONENT = 5
     DEFAULT_LEARNING_RATE = 3e-4
     DEFAULT_PREFETCH_BATCHES = 64
     DEFAULT_PREFETCH_WORKERS = 4
     DEFAULT_SEED = 42
+    DEFAULT_EPOCHS = 50
 
     parser = argparse.ArgumentParser(description="Train GPT-2 on Tiny Shakespeare.")
     parser.add_argument("--sequence-length", type=int, default=DEFAULT_SEQUENCE_LENGTH)
@@ -63,6 +65,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--prefetch-workers", type=int, default=DEFAULT_PREFETCH_WORKERS
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+    parser.add_argument(
+        "--dtype",
+        choices=("float32", "bfloat16", "mixed"),
+        default="float32",
+        help="Mixed uses bfloat16 compute with float32 master weights and AdamW state.",
+    )
+    parser.add_argument(
+        "--compile", action=argparse.BooleanOptionalAction, default=True
+    )
     parser.add_argument("--verbose", action="store_true")
     return parser
 
@@ -83,16 +95,23 @@ def print_preamble(args: argparse.Namespace) -> None:
     print(f"  Prefetch batches: {args.prefetch_batches}")
     print(f"  Prefetch workers: {args.prefetch_workers}")
     print(f"  Seed: {args.seed}")
+    print(f"  Epochs: {args.epochs}")
+    print(f"  Dtype: {args.dtype}")
+    print(f"  Compile training step: {args.compile}")
     print(f"  Verbose: {args.verbose}")
 
 
-def make_model() -> GPT2MLXModel:
-    return GPT2MLXModel(
+def make_model(dtype: mx.Dtype = mx.float32) -> GPT2MLXModel:
+    model = GPT2MLXModel(
         GPT2_CONFIG_124M,
         embd_pdrop=0.0,
         resid_pdrop=0.0,
         attn_pdrop=0.0,
     )
+    if dtype != mx.float32:
+        model.set_dtype(dtype)
+        model.transformer.wte.weight = model.lm_head.weight
+    return model
 
 
 def make_dataloader(
@@ -116,14 +135,8 @@ def make_dataloader(
     return dataloader
 
 
-def count_tokens_in_dataloader(dataloader: MLXDataLoader) -> int:
-    dataloader.reset()
-    total_tokens = 0
-    for inputs, _ in dataloader:
-        total_tokens += inputs.size
-
-    dataloader.reset()
-    return total_tokens
+def make_optimizer(learning_rate: float) -> optim.AdamW:
+    return optim.AdamW(learning_rate=learning_rate)
 
 
 def main():
@@ -136,29 +149,33 @@ def main():
         GPT2ModelType.SMALL, cache_dir=os.path.join("models", "gpt2")
     )
 
-    # Create model
-    model = make_model()
-
     # Set device
     mlx_device = Device.gpu().to_mlx()
     mx.set_default_device(mlx_device)
 
-    optimizer = optim.AdamW(learning_rate=args.learning_rate)
+    optimizer_fn = partial(make_optimizer, args.learning_rate)
     loss_fn = nn.losses.cross_entropy
+    dtype = mx.float32 if args.dtype == "float32" else mx.bfloat16
+    master_weights = args.dtype == "mixed"
     batch_size = (
         args.batch_size
         if args.batch_size is not None
         else find_optimum_batch_size(
             tokenizer=tokenizer,
             loss_fn=loss_fn,
-            optimizer=optimizer,
+            optimizer_fn=optimizer_fn,
             sequence_len=args.sequence_length,
             prefetch_batches=args.prefetch_batches,
             prefetch_workers=args.prefetch_workers,
             n_steps=args.batch_size_tuning_training_steps,
             max_batch_exponent=args.batch_size_tuning_max_exponent,
+            dtype=dtype,
+            compiled=args.compile,
+            master_weights=master_weights,
         )
     )
+    model = make_model(dtype)
+    optimizer = optimizer_fn()
     dataloader = make_dataloader(
         tokenizer,
         args.sequence_length,
@@ -168,7 +185,16 @@ def main():
     )
 
     print_header("Training GPT2", "=", 120)
-    train_gpt2(model, dataloader, optimizer, loss_fn=loss_fn, verbose=args.verbose)
+    train_gpt2(
+        model,
+        dataloader,
+        optimizer,
+        loss_fn=loss_fn,
+        epochs=args.epochs,
+        verbose=args.verbose,
+        compiled=args.compile,
+        master_weights=master_weights,
+    )
 
 
 def find_optimum_batch_size(
@@ -177,22 +203,25 @@ def find_optimum_batch_size(
     prefetch_batches: int,
     prefetch_workers: int,
     loss_fn: MLXLossFunction,
-    optimizer: optim.Optimizer,
+    optimizer_fn: Callable[[], optim.Optimizer],
     max_batch_exponent: int,
     n_steps: int,
+    dtype: mx.Dtype,
+    compiled: bool = True,
+    master_weights: bool = False,
 ) -> int:
+    if n_steps <= 0:
+        raise ValueError("batch-size tuning steps must be positive")
+    if max_batch_exponent < 0:
+        raise ValueError("batch-size tuning max exponent cannot be negative")
     print_header("Tuning batch-size", "=", HEADER_WIDTH)
 
-    batch_sizes: list[int] = []
-    throughputs_train: list[float] = []
-    throughputs_eval: list[float] = []
+    results: list[tuple[int, float]] = []
 
     for exponent in range(max_batch_exponent + 1):
         batch_size = 2**exponent
         print("Batch size : ", batch_size)
-        batch_sizes.append(batch_size)
-
-        model = make_model()
+        model = make_model(dtype)
         dataloader = make_dataloader(
             tokenizer,
             sequence_len,
@@ -201,52 +230,55 @@ def find_optimum_batch_size(
             prefetch_workers,
         )
 
-        def loss_fn_inner(m: nn.Module, ins: mx.array, targs: mx.array) -> mx.array:
-            logits = m(ins)  # (batch-size, token-sequence-length, vocab-size)
-            loss = mx.mean(nn.losses.cross_entropy(logits, targs))
-            return loss
+        optimizer = optimizer_fn()
+        step = make_gpt2_train_step(
+            model,
+            optimizer,
+            loss_fn,
+            compiled=compiled,
+            master_weights=master_weights,
+        )
+        model.train()
+        state = [model.state, optimizer.state]
 
-        loss_and_grad_fn = nn.value_and_grad(model, loss_fn_inner)
+        # Pay the first-use compilation and allocation costs before measuring.
+        for inputs, targets in islice(dataloader, 2):
+            loss = step(inputs, targets)
+            mx.eval(loss, state)
+        dataloader.reset()
+        mx.reset_peak_memory()
 
         time_start_train = perf_counter_ns()
         tokens_train = 0
+        actual_steps = 0
         for inputs, targets in islice(dataloader, n_steps):
-            _, grads = loss_and_grad_fn(model, inputs, targets)
-            optimizer.update(model, grads)
-            mx.eval(model.parameters(), optimizer.state)
-
+            # The final short sample has a different shape and would compile
+            # another graph; it is not representative of the steady-state batch.
+            if inputs.shape != (batch_size, sequence_len):
+                continue
+            loss = step(inputs, targets)
+            mx.eval(loss, state)
             tokens_train += inputs.size
+            actual_steps += 1
 
         time_end_train = perf_counter_ns()
-
-        time_start_eval = perf_counter_ns()
-        _ = evaluate_gpt2(model, dataloader, loss_fn)
-        time_end_eval = perf_counter_ns()
-        tokens_eval = count_tokens_in_dataloader(dataloader)
-
-        # Compute train, evaluation and total throughputs
+        if actual_steps == 0:
+            raise ValueError(f"no full batches for batch size {batch_size}")
         time_train = time_end_train - time_start_train
-        throughput_train = int(NANOS_IN_SEC * tokens_train / time_train)
-        throughputs_train.append(throughput_train)
-
-        time_eval = time_end_eval - time_start_eval
-        throughput_eval = int(NANOS_IN_SEC * tokens_eval / time_eval)
-        throughputs_eval.append(throughput_eval)
+        throughput_train = NANOS_IN_SEC * tokens_train / time_train
+        results.append((batch_size, throughput_train))
+        peak_gib = mx.get_peak_memory() / 2**30
 
         print(
-            f"Training   : [ Tokens: {tokens_train}, Time: {time_train}ns, Throughput: {throughput_train} tokens/sec, Iterations: {n_steps} ]"
-        )
-        print(
-            f"Evaluation : [ Tokens: {tokens_eval}, Time: {time_eval}ns, Throughput: {throughput_eval} tokens/sec ]"
+            f"Training: {tokens_train} tokens, {actual_steps} steps, "
+            f"{throughput_train:.0f} tokens/sec, {peak_gib:.2f} GiB peak"
         )
         print("-" * HEADER_WIDTH)
 
-    batch_size_opt_idx = mx.argmax(mx.array(throughputs_train))
-    batch_size_opt = mx.array(batch_sizes)[batch_size_opt_idx].item()
+    batch_size_opt = max(results, key=lambda result: result[1])[0]
     print("Using optimum batch size:", batch_size_opt)
-    print("=" * HEADER_WIDTH)
 
-    return cast(int, batch_size_opt)
+    return batch_size_opt
 
 
 if __name__ == "__main__":

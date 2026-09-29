@@ -2,7 +2,7 @@ import unittest
 
 import torch
 
-from neurnet.cnn import LeNet
+from neurnet.arch.cnn import LeNet
 
 
 class LeNetVisualizationTests(unittest.TestCase):

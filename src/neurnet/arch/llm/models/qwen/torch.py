@@ -1,13 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 import torch
 from torch import nn
 
 from neurnet.arch.llm.config import LanguageModelConfig
-from neurnet.arch.llm.kv_cache import KVCacheTorch, LayerCacheTorch
+from neurnet.arch.llm.kv_cache import (
+    KVCacheTorch,
+    LayerCacheTorch,
+    fixed_cache_capacity,
+)
 from neurnet.arch.llm.types import LanguageModelTorch
 
 # ===-----------------------------------------------------------------------===
@@ -45,8 +49,13 @@ class Qwen3TorchModel(LanguageModelTorch):
 
         # Config
         self.cfg: LanguageModelConfig = cfg
-        self._dtype = dtype
-        self.current_cache_pos = 0  # Track current position in KV cache
+        self._compiled_decode: (
+            Callable[
+                [torch.Tensor, tuple[LayerCacheTorch, ...], torch.Tensor],
+                tuple[torch.Tensor, torch.Tensor],
+            ]
+            | None
+        ) = None
 
         # Reusable utilities
         cos, sin = compute_rope_params(
@@ -68,51 +77,77 @@ class Qwen3TorchModel(LanguageModelTorch):
     def forward(
         self, idx: torch.Tensor, cache: KVCacheTorch | None = None
     ) -> torch.Tensor:
-        # Forward pass
-        tok_embeds = self.tok_emb(idx)
-        x = tok_embeds
-
-        num_tokens = x.shape[1]
-        if cache is not None:
-            pos_start = self.current_cache_pos
-            pos_end = pos_start + num_tokens
-            self.current_cache_pos = pos_end
-            mask = torch.triu(
-                torch.ones(pos_end, pos_end, device=x.device, dtype=torch.bool),
-                diagonal=1,
-            )[pos_start:pos_end, :pos_end]
-        else:
-            pos_start = 0  # Not strictly necessary but helps torch.compile TODO: Why?
-            mask = torch.triu(
-                torch.ones(num_tokens, num_tokens, device=x.device, dtype=torch.bool),
-                diagonal=1,
-            )
-
-        # Prefill (no cache): mask starts as (num_tokens, num_tokens)
-        # Cached decoding: mask starts as (num_tokens, prev_k_number_tokens + num_tokens)
-        #
-        # We add two leading dimensions so the mask becomes
-        # (1, 1, num_tokens, num_tokens) during prefill and
-        # (1, 1, num_tokens, total_key_tokens) during cached decoding.
-        # These extra dimensions let PyTorch broadcast the same mask
-        # across all batches and attention heads when applying it to
-        # attn_scores of shape (batch, num_heads, num_tokens, total_key_tokens).
-        mask = mask[None, None, :, :]  # broadcast mask
-
-        for i, block in enumerate(self.trf_blocks):
-            blk_cache = cache.get(i) if cache else None
-            x, new_blk_cache = block(
-                x, mask, self.cos, self.sin, start_pos=pos_start, cache=blk_cache
-            )
-            if cache is not None:
-                cache.update(i, new_blk_cache)
-
-        x = self.final_norm(x)
-        logits = self.out_head(x.to(self._dtype))
+        if cache is None:
+            return self._forward_uncached(idx)
+        if cache.offset == 0:
+            return self._prefill_fixed_cache(idx, cache)
+        if idx.shape[1] != 1:
+            raise ValueError("fixed-cache decoding requires one token at a time")
+        if cache.offset >= min(cache.capacity, self.cfg.context_length):
+            raise ValueError("Qwen context length exceeded")
+        decode = self._compiled_decode or self._decode_one
+        logits, next_position = decode(idx, cache.layers, cache.position)
+        cache.position = next_position
+        cache.offset += 1
         return logits
 
-    def reset_kv_cache(self) -> None:
-        self.current_cache_pos = 0
+    def _forward_uncached(self, idx: torch.Tensor) -> torch.Tensor:
+        if idx.shape[1] > self.cfg.context_length:
+            raise ValueError("Qwen context length exceeded")
+        x = self.tok_emb(idx)
+        for block in self.trf_blocks:
+            x, _ = block(x, self.cos, self.sin)
+        x = self.final_norm(x)
+        return self.out_head(x.to(self.out_head.weight.dtype))
+
+    def compile(self, *args: Any, **kwargs: Any) -> None:
+        """Compile only the stable-shape decoder; prefill remains eager."""
+        self._compiled_decode = torch.compile(self._decode_one, *args, **kwargs)
+
+    def make_kv_cache(
+        self, batch_size: int, max_length: int, device: torch.device
+    ) -> KVCacheTorch:
+        capacity = fixed_cache_capacity(max_length, self.cfg.context_length)
+        return KVCacheTorch(
+            n_layers=self.cfg.n_layers,
+            batch_size=batch_size,
+            n_heads=self.cfg.n_kv_groups,
+            head_dim=self.cfg.effective_head_dim,
+            capacity=capacity,
+            dtype=self.tok_emb.weight.dtype,
+            device=device,
+        )
+
+    def create_kv_cache(
+        self, batch_size: int, max_length: int, device: torch.device
+    ) -> KVCacheTorch:
+        return self.make_kv_cache(batch_size, max_length, device)
+
+    def _prefill_fixed_cache(
+        self, idx: torch.Tensor, cache: KVCacheTorch
+    ) -> torch.Tensor:
+        if idx.shape[1] > cache.capacity:
+            raise ValueError("Qwen context length exceeded")
+        x = self.tok_emb(idx)
+        for layer_idx, block in enumerate(self.trf_blocks):
+            x, (keys, values) = block(x, self.cos, self.sin)
+            cache.write_prefix(layer_idx, keys, values)
+        cache.finish_prefill(idx.shape[1])
+        return self.out_head(self.final_norm(x).to(self.out_head.weight.dtype))
+
+    def _decode_one(
+        self,
+        idx: torch.Tensor,
+        layers: tuple[LayerCacheTorch, ...],
+        position: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        x = self.tok_emb(idx)
+        for block, layer in zip(self.trf_blocks, layers, strict=True):
+            x = cast(TransformerBlock, block).decode_one(
+                x, self.cos, self.sin, layer, position
+            )
+        x = self.final_norm(x)
+        return self.out_head(x.to(self.out_head.weight.dtype)), position + 1
 
     def config(self) -> LanguageModelConfig:
         return self.cfg
@@ -141,18 +176,13 @@ class TransformerBlock(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        mask: torch.Tensor,
         cos: torch.Tensor,
         sin: torch.Tensor,
-        start_pos: int = 0,
-        cache: LayerCacheTorch | None = None,
     ) -> tuple[torch.Tensor, LayerCacheTorch]:
         # Shortcut connection for attention block
         shortcut = x
         x = self.norm1(x)
-        x, next_cache = self.att(
-            x, mask, cos, sin, start_pos=start_pos, cache=cache
-        )  # Shape [batch_size, num_tokens, emb_size]
+        x, next_cache = self.att(x, cos, sin)
         x = x + shortcut  # Add the original input back
 
         # Shortcut connection for feed-forward block
@@ -162,6 +192,17 @@ class TransformerBlock(nn.Module):
         x = x + shortcut  # Add the original input back
 
         return x, next_cache
+
+    def decode_one(
+        self,
+        x: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+        cache: LayerCacheTorch,
+        position: torch.Tensor,
+    ) -> torch.Tensor:
+        x = x + self.att.decode_one(self.norm1(x), cos, sin, cache, position)
+        return x + self.ff(self.norm2(x))
 
 
 class FeedForward(nn.Module):
@@ -223,11 +264,8 @@ class GroupedQueryAttention(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
-        mask: torch.Tensor,
         cos: torch.Tensor,
         sin: torch.Tensor,
-        start_pos: int = 0,
-        cache: LayerCacheTorch | None = None,
     ) -> tuple[torch.Tensor, LayerCacheTorch]:
         b, num_tokens, _ = x.shape
 
@@ -254,31 +292,59 @@ class GroupedQueryAttention(nn.Module):
             keys_new = self.k_norm(keys_new)
 
         # Apply RoPE
-        queries = apply_rope(queries, cos, sin, offset=start_pos)
-        keys_new = apply_rope(keys_new, cos, sin, offset=start_pos)
-
-        if cache is not None:
-            prev_k, prev_v = cache
-            keys = torch.cat([prev_k, keys_new], dim=2)
-            values = torch.cat([prev_v, values_new], dim=2)
-        else:
-            start_pos = 0  # reset RoPE
-            keys, values = keys_new, values_new
+        queries = apply_rope(queries, cos, sin)
+        keys, values = apply_rope(keys_new, cos, sin), values_new
         next_cache = (keys, values)
 
         # Expand K and V to match number of heads
         keys = keys.repeat_interleave(self.group_size, dim=1)
         values = values.repeat_interleave(self.group_size, dim=1)
 
-        # Attention
-        attn_scores = queries @ keys.transpose(2, 3)
-        attn_scores = attn_scores.masked_fill(mask, -torch.inf)
-        attn_weights = torch.softmax(attn_scores / self.head_dim**0.5, dim=-1)
-
-        context = (
-            (attn_weights @ values).transpose(1, 2).reshape(b, num_tokens, self.d_out)
-        )
+        context = nn.functional.scaled_dot_product_attention(
+            queries,
+            keys,
+            values,
+            is_causal=True,
+        ).transpose(1, 2)
+        context = context.reshape(b, num_tokens, self.d_out)
         return self.out_proj(context), next_cache
+
+    def decode_one(
+        self,
+        x: torch.Tensor,
+        cos: torch.Tensor,
+        sin: torch.Tensor,
+        cache: LayerCacheTorch,
+        position: torch.Tensor,
+    ) -> torch.Tensor:
+        batch_size = x.shape[0]
+        queries = self.W_query(x).view(batch_size, 1, self.num_heads, self.head_dim)
+        keys = self.W_key(x).view(batch_size, 1, self.num_kv_groups, self.head_dim)
+        values = self.W_value(x).view(batch_size, 1, self.num_kv_groups, self.head_dim)
+        queries = queries.transpose(1, 2)
+        keys = keys.transpose(1, 2)
+        values = values.transpose(1, 2)
+        if self.q_norm is not None:
+            queries = self.q_norm(queries)
+        if self.k_norm is not None:
+            keys = self.k_norm(keys)
+
+        queries = apply_rope_at(queries, cos, sin, position)
+        keys = apply_rope_at(keys, cos, sin, position)
+        cache[0].index_copy_(2, position.reshape(1), keys)
+        cache[1].index_copy_(2, position.reshape(1), values)
+
+        expanded_keys = cache[0].repeat_interleave(self.group_size, dim=1)
+        expanded_values = cache[1].repeat_interleave(self.group_size, dim=1)
+        visible = torch.arange(cache[0].shape[2], device=x.device) <= position
+        context = nn.functional.scaled_dot_product_attention(
+            queries,
+            expanded_keys,
+            expanded_values,
+            attn_mask=visible[None, None, None, :],
+            is_causal=False,
+        ).transpose(1, 2)
+        return self.out_proj(context.reshape(batch_size, 1, self.d_out))
 
 
 # ===-----------------------------------------------------------------------===
@@ -395,6 +461,17 @@ def apply_rope(
 
     # It's ok to use lower-precision after applying cos and sin rotation
     return x_rotated.to(dtype=x.dtype)
+
+
+def apply_rope_at(
+    x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, position: torch.Tensor
+) -> torch.Tensor:
+    """Apply RoPE at a tensor-valued position without a Python shape guard."""
+    head_dim = x.shape[-1]
+    rotated = torch.cat((-x[..., head_dim // 2 :], x[..., : head_dim // 2]), dim=-1)
+    selected_cos = cos.index_select(0, position.reshape(1))[None, None, :, :]
+    selected_sin = sin.index_select(0, position.reshape(1))[None, None, :, :]
+    return (x * selected_cos + rotated * selected_sin).to(dtype=x.dtype)
 
 
 # ===-----------------------------------------------------------------------===

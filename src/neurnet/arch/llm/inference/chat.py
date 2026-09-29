@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import Enum
+from typing import Protocol
 
-from .runtime import GenerationConfig, GenerationResult, InferenceRuntime
+from .runtime import GenerationConfig, GenerationResult
 
 
 class ChatRole(Enum):
@@ -25,12 +26,22 @@ class ChatMessage:
 type PromptBuilder = Callable[[Sequence[ChatMessage]], str]
 
 
+class InferenceRuntimeI(Protocol):
+    def generate(
+        self,
+        prompt: str,
+        config: GenerationConfig,
+        *,
+        on_text: Callable[[str], None] | None = None,
+    ) -> GenerationResult: ...
+
+
 class ChatSession:
     """A stateful chat session over an inference runtime."""
 
     def __init__(
         self,
-        runtime: InferenceRuntime,
+        runtime: InferenceRuntimeI,
         prompt_builder: PromptBuilder,
         *,
         system_prompt: str = "You are a helpful assistant.",

@@ -8,7 +8,6 @@ from typing import Any, cast
 import mlx.core as mx
 import torch
 
-from neurnet.arch.llm.kv_cache import KVCache
 from neurnet.arch.llm.types import (
     LanguageModel,
     LanguageModelMLX,
@@ -198,8 +197,10 @@ def _generate_token_stream_mlx_cached(
     policy: GenerationPolicy | None,
 ) -> Iterator[int]:
     model.eval()
-    cache = KVCache[mx.array](n_layers=model.config().n_layers)
-    model.reset_kv_cache()
+    cache = model.create_kv_cache(
+        batch_size=token_ids.shape[0],
+        max_length=token_ids.shape[1] + max(0, max_new_tokens - 1),
+    )
     seen_token_ids = [
         cast(int, token_ids[0, index].item()) for index in range(token_ids.shape[1])
     ]
@@ -372,8 +373,11 @@ def _generate_token_stream_torch_cached(
     policy: GenerationPolicy | None,
 ) -> Iterator[int]:
     model.eval()
-    cache = KVCache[torch.Tensor](n_layers=model.config().n_layers)
-    model.reset_kv_cache()
+    cache = model.create_kv_cache(
+        batch_size=token_ids.shape[0],
+        max_length=token_ids.shape[1] + max(0, max_new_tokens - 1),
+        device=token_ids.device,
+    )
     seen_token_ids = [int(token_id) for token_id in token_ids.flatten().tolist()]
     generated_ids: list[int] = []
 

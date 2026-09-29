@@ -137,9 +137,7 @@ def normalize_text(text: str) -> str:
 
     # convert unicode superscripts into exponent form (e.g., 2² -> 2**2)
     def convert_superscripts(s: str, base: str | None = None) -> str:
-        converted = "".join(
-            SUPERSCRIPT_MAP[ch] if ch in SUPERSCRIPT_MAP else ch for ch in s
-        )
+        converted = "".join(SUPERSCRIPT_MAP.get(ch, ch) for ch in s)
         if base is None:
             return converted
         return f"{base}**{converted}"
@@ -237,7 +235,7 @@ def equality_check(expr_gtruth: str, expr_pred: str) -> bool:
         try:
             # If the difference is 0, they are equivalent
             return simplify(gtruth - pred) == 0
-        except SympifyError, TypeError:
+        except (SympifyError, TypeError):
             pass
 
     return False

@@ -1,4 +1,4 @@
-from .chat import ChatMessage, ChatRole, ChatSession, PromptBuilder
+from .chat import ChatMessage, ChatRole, ChatSession, InferenceRuntimeI, PromptBuilder
 from .generate import (
     GenerationPolicy,
     generate_stats,
@@ -15,6 +15,7 @@ __all__ = [
     "GenerationPolicy",
     "GenerationResult",
     "InferenceRuntime",
+    "InferenceRuntimeI",
     "PromptBuilder",
     "generate_stats",
     "generate_text_stream",

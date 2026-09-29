@@ -7,12 +7,13 @@ from .inference import (
     GenerationPolicy,
     GenerationResult,
     InferenceRuntime,
+    InferenceRuntimeI,
     PromptBuilder,
     generate_stats,
     generate_text_stream,
     generate_token_stream,
 )
-from .kv_cache import KVCache, KVCacheMLX, KVCacheTorch
+from .kv_cache import KVCacheMLX, KVCacheTorch
 from .types import (
     LanguageModel,
     LanguageModelMLX,
@@ -29,7 +30,7 @@ __all__ = [
     "GenerationPolicy",
     "GenerationResult",
     "InferenceRuntime",
-    "KVCache",
+    "InferenceRuntimeI",
     "KVCacheMLX",
     "KVCacheTorch",
     "LanguageModel",
