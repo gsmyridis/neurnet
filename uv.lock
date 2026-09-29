@@ -826,6 +826,7 @@ dependencies = [
     { name = "tokenizers" },
     { name = "torch" },
     { name = "torchvision" },
+    { name = "tqdm" },
     { name = "transformers" },
 ]
 
@@ -841,6 +842,7 @@ requires-dist = [
     { name = "tokenizers", specifier = ">=0.23.2" },
     { name = "torch", specifier = ">=2.14.0" },
     { name = "torchvision", specifier = ">=0.29.0" },
+    { name = "tqdm", specifier = ">=4.70.1" },
     { name = "transformers", specifier = ">=5.17.0" },
 ]
 

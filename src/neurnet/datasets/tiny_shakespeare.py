@@ -24,12 +24,15 @@ class TinyShakespeareDataset(Dataset):
         sequence_length: int,
         shuffle: bool,
         batch_size: int,
+        *,
+        drop_last: bool = False,
     ):
         self.root_dir = root_dir
         self.shuffle = shuffle
         self.batch_size = batch_size
         self.tokenizer = tokenizer
         self.sequence_length = sequence_length
+        self.drop_last = drop_last
 
     def download(self) -> Path:
         """Download Tiny Shakespeare into root dir unless it already exists."""
@@ -56,6 +59,7 @@ class TinyShakespeareDataset(Dataset):
             batch_size=self.batch_size,
             prefetch_batches=prefetch_batches,
             prefetch_worker_threads=prefetch_worker_threads,
+            drop_last=self.drop_last,
         )
 
 
@@ -69,6 +73,8 @@ class TinyShakespeareMLXDataLoader(MLXDataLoader):
         batch_size: int,
         prefetch_batches: int,
         prefetch_worker_threads: int,
+        *,
+        drop_last: bool = False,
     ):
 
         buffer = text_file_to_buffer_mlx(
@@ -77,10 +83,15 @@ class TinyShakespeareMLXDataLoader(MLXDataLoader):
             sequence_length=sequence_length,
             batch_size=batch_size,
             shuffle=shuffle,
+            drop_last=drop_last,
         )
+        self._num_batches = len(buffer)
         self._stream = buffer.to_stream().prefetch(
             prefetch_batches, prefetch_worker_threads
         )
+
+    def __len__(self) -> int:
+        return self._num_batches
 
     def __next__(self) -> tuple[mx.array, mx.array]:
         next_sample = next(self._stream)

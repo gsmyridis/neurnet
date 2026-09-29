@@ -14,6 +14,8 @@ def text_file_to_buffer_mlx(
     sequence_length: int,
     batch_size: int,
     shuffle: bool,
+    *,
+    drop_last: bool = False,
 ) -> Buffer:
     text = Path(path).read_text(encoding="utf-8")
     return text_to_buffer_mlx(
@@ -22,6 +24,7 @@ def text_file_to_buffer_mlx(
         sequence_length=sequence_length,
         batch_size=batch_size,
         shuffle=shuffle,
+        drop_last=drop_last,
     )
 
 
@@ -31,24 +34,37 @@ def text_to_buffer_mlx(
     sequence_length: int,
     batch_size: int,
     shuffle: bool,
+    *,
+    drop_last: bool = False,
 ) -> Buffer:
     """Create next-token training batches from text with a tokenizer."""
     tokens = tokenizer.encode(text)
-    return tokens_to_buffer_mlx(tokens, sequence_length, batch_size, shuffle)
+    return tokens_to_buffer_mlx(
+        tokens, sequence_length, batch_size, shuffle, drop_last=drop_last
+    )
 
 
 def tokens_to_buffer_mlx(
-    tokens: Sequence[int], sequence_length: int, batch_size: int, shuffle: bool
+    tokens: Sequence[int],
+    sequence_length: int,
+    batch_size: int,
+    shuffle: bool,
+    *,
+    drop_last: bool = False,
 ) -> Buffer:
     """Create next-token training batches from a token sequence.
 
     Each buffer element contains ``inputs`` and one-token-shifted ``targets``.
     The final sample retains any token pairs that do not fill a sequence.
+    With ``drop_last=True``, omit incomplete batches and short sequences so
+    every input and target has shape ``(batch_size, sequence_length)``.
     """
     tokens_array = mx.array(list(tokens))
     # We take the divmod of len(tokens_array) - 1 because we need the prediction
     # to be in the sequence.
     num_full_sequences, remainder = divmod(len(tokens_array) - 1, sequence_length)
+    if drop_last:
+        num_full_sequences -= num_full_sequences % batch_size
 
     def make_batch(offset: int) -> dict[str, mx.array]:
         size = min(batch_size, num_full_sequences - offset)
@@ -62,7 +78,7 @@ def tokens_to_buffer_mlx(
     batches = [
         make_batch(offset) for offset in range(0, num_full_sequences, batch_size)
     ]
-    if remainder:
+    if remainder and not drop_last:
         start = num_full_sequences * sequence_length
         batches.append(
             {

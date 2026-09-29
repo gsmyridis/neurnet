@@ -64,7 +64,19 @@ precision baseline. `--dtype mixed` computes with bfloat16 parameters while
 keeping float32 master weights and AdamW state; `--dtype bfloat16` uses bfloat16
 for both parameters and optimizer state and should be checked for convergence.
 The loss is evaluated in float32 in all modes. `--verbose` reports each epoch's
-training loss and throughput.
+training loss and throughput. Async evaluation is enabled by default, with at
+most two training steps in flight; `--no-async-eval` selects synchronous
+evaluation for comparison. Batch-size tuning uses the selected evaluation mode
+and waits for all measured updates to finish before recording throughput.
+
+Each epoch displays a tqdm progress bar with completed batches, processing rate,
+elapsed time, and ETA. The display refreshes at most twice per second, and
+`--no-progress` disables it independently of `--verbose`.
+
+Add `--save-path models/gpt2/shakespeare.safetensors` to save the model weights
+after training. Both `.safetensors` and `.npz` are supported, and parent
+directories are created automatically. This saves model weights only, without
+optimizer state. Omit the option to skip saving.
 
 GPT-2 and Qwen3 inference use backend-specific, fixed-capacity KV caches.
 Prefill runs once; single-token decoding updates the allocated cache without

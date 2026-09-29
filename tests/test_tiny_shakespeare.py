@@ -32,10 +32,14 @@ class TinyShakespeareMLXDataLoaderTests(unittest.TestCase):
                 prefetch_batches=1,
                 prefetch_worker_threads=1,
             )
+            self.assertEqual(len(loader), 3)
 
             inputs, targets = next(loader)
             last_inputs, last_targets = next(loader)
             final_inputs, final_targets = next(loader)
+            self.assertEqual(len(loader), 3)
+            loader.reset()
+            self.assertEqual(len(list(loader)), 3)
 
         self.assertEqual(inputs.shape, (64, 8))
         self.assertEqual(targets.shape, (64, 8))

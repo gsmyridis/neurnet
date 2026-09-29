@@ -1,7 +1,7 @@
 """Replication of GPT2 architecture in MLX."""
 
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sized
 from functools import partial
 from time import perf_counter
 from typing import Any, Self
@@ -10,6 +10,7 @@ import mlx.core as mx
 from mlx import nn
 from mlx.optimizers import Optimizer
 from mlx.utils import tree_map
+from tqdm import tqdm
 
 from neurnet.arch.llm.config import LanguageModelConfig
 from neurnet.arch.llm.kv_cache import KVCacheMLX, LayerCacheMLX, fixed_cache_capacity
@@ -474,6 +475,46 @@ def make_gpt2_train_step(
     return partial(mx.compile, inputs=state, outputs=state)(step)
 
 
+def iter_gpt2_train_steps(
+    step: Callable[[mx.array, mx.array], mx.array],
+    batches: Iterable[tuple[mx.array, mx.array]],
+    state: list[Any],
+    *,
+    async_eval: bool = True,
+) -> Iterator[tuple[mx.array, int]]:
+    """Yield completed losses and token counts, with at most two steps in flight.
+
+    In async mode, submit the next step before waiting for the previous one.
+    Snapshot the state containers (without copying arrays) because each step
+    replaces their contents. A yielded loss and its optimizer update are ready
+    to read, so logging and progress updates do not introduce another GPU wait.
+    """
+    # ((loss, state_snapshot), token_count)
+    pending: tuple[tuple[mx.array, list[Any]], int] | None = None
+    try:
+        for inputs, targets in batches:
+            loss = step(inputs, targets)
+            if not async_eval:
+                mx.eval(loss, state)
+                yield loss, targets.size
+                continue
+
+            outputs = tree_map(lambda value: value, (loss, state))
+            mx.async_eval(outputs)
+            if pending is not None:
+                mx.eval(pending[0])
+                yield pending[0][0], pending[1]
+            pending = outputs, targets.size
+
+        if pending is not None:
+            outputs, tokens = pending
+            mx.eval(outputs)
+            yield outputs[0], tokens
+    finally:
+        # Drain updates on exhaustion, early close, or an exception.
+        mx.eval(state)
+
+
 def train_gpt2(
     model: GPT2MLXModel,
     dataloader: MLXDataLoader,
@@ -483,11 +524,14 @@ def train_gpt2(
     verbose: bool = True,
     compiled: bool = True,
     master_weights: bool = False,
+    async_eval: bool = True,
+    progress: bool = True,
 ) -> GPT2MLXModel:
     step = make_gpt2_train_step(
         model, optimizer, loss_fn, compiled=compiled, master_weights=master_weights
     )
-    state = [model.state, optimizer.state]
+    state = [model.state, optimizer.state, mx.random.state]
+    total_batches = len(dataloader) if isinstance(dataloader, Sized) else None
 
     for e in range(epochs):
         dataloader.reset()
@@ -496,12 +540,22 @@ def train_gpt2(
         epoch_loss = 0.0
         epoch_tokens = 0
 
-        for inputs, targets in dataloader:
-            loss = step(inputs, targets)
-            mx.eval(loss, state)
-            epoch_tokens += targets.size
-            if verbose:
-                epoch_loss += loss.item() * targets.size
+        with tqdm(
+            total=total_batches,
+            desc=f"Epoch {e + 1}/{epochs}",
+            unit="batch",
+            mininterval=0.5,
+            dynamic_ncols=True,
+            disable=not progress,
+            leave=False,
+        ) as bar:
+            for loss, tokens in iter_gpt2_train_steps(
+                step, dataloader, state, async_eval=async_eval
+            ):
+                epoch_tokens += tokens
+                if verbose:
+                    epoch_loss += loss.item() * tokens
+                bar.update()
 
         if epoch_tokens == 0:
             raise ValueError("cannot train on an empty dataloader")
@@ -510,7 +564,9 @@ def train_gpt2(
             print(
                 f"[Epoch {e + 1} / {epochs}]: "
                 f"Train loss {epoch_loss / epoch_tokens:.4f}, "
+                f"Elapsed time: {elapsed:.0f}, "
                 f"{epoch_tokens / elapsed:.0f} tokens/sec"
+                "]"
             )
 
     dataloader.reset()

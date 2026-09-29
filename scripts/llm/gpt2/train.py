@@ -3,6 +3,7 @@ import os
 from collections.abc import Callable
 from functools import partial
 from itertools import islice
+from pathlib import Path
 from time import perf_counter_ns
 
 import mlx.core as mx
@@ -14,6 +15,7 @@ from neurnet.arch.llm.models.gpt2 import (
     GPT2MLXModel,
     GPT2ModelType,
     GPT2Tokenizer,
+    iter_gpt2_train_steps,
     make_gpt2_train_step,
     train_gpt2,
 )
@@ -75,7 +77,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--compile", action=argparse.BooleanOptionalAction, default=True
     )
-    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--async-eval",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Overlap training-step submission and GPU execution (default: enabled).",
+    )
+    parser.add_argument(
+        "--progress",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Show per-epoch progress, batch rate, and ETA (default: enabled).",
+    )
+    parser.add_argument(
+        "--verbose",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Show per-epoch loss, total time and toke throughput.",
+    )
+    parser.add_argument(
+        "--save-path",
+        type=Path,
+        metavar="PATH",
+        help="Save trained model weights to a .safetensors or .npz file.",
+    )
     return parser
 
 
@@ -98,7 +123,12 @@ def print_preamble(args: argparse.Namespace) -> None:
     print(f"  Epochs: {args.epochs}")
     print(f"  Dtype: {args.dtype}")
     print(f"  Compile training step: {args.compile}")
+    print(f"  Async evaluation: {args.async_eval}")
+    print(f"  Epoch progress: {args.progress}")
     print(f"  Verbose: {args.verbose}")
+    print(
+        f"  Save path: {args.save_path if args.save_path is not None else 'disabled'}"
+    )
 
 
 def make_model(dtype: mx.Dtype = mx.float32) -> GPT2MLXModel:
@@ -120,6 +150,8 @@ def make_dataloader(
     batch_size: int,
     prefetch_batches: int,
     prefetch_workers: int,
+    *,
+    drop_last: bool = False,
 ) -> MLXDataLoader:
 
     dataset = TinyShakespeareDataset(
@@ -128,6 +160,7 @@ def make_dataloader(
         tokenizer=tokenizer,
         shuffle=True,
         batch_size=batch_size,
+        drop_last=drop_last,
     )
     dataloader = dataset.to_mlx(
         prefetch_batches=prefetch_batches, prefetch_worker_threads=prefetch_workers
@@ -140,7 +173,12 @@ def make_optimizer(learning_rate: float) -> optim.AdamW:
 
 
 def main():
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    if args.save_path is not None:
+        args.save_path = args.save_path.expanduser()
+        if args.save_path.suffix not in (".safetensors", ".npz"):
+            parser.error("--save-path must end with '.safetensors' or '.npz'")
     print_preamble(args)
     mx.random.seed(args.seed)
 
@@ -172,6 +210,7 @@ def main():
             dtype=dtype,
             compiled=args.compile,
             master_weights=master_weights,
+            async_eval=args.async_eval,
         )
     )
     model = make_model(dtype)
@@ -194,7 +233,13 @@ def main():
         verbose=args.verbose,
         compiled=args.compile,
         master_weights=master_weights,
+        async_eval=args.async_eval,
+        progress=args.progress,
     )
+    if args.save_path is not None:
+        args.save_path.parent.mkdir(parents=True, exist_ok=True)
+        model.save_weights(str(args.save_path))
+        print(f"Saved trained model weights to {args.save_path}")
 
 
 def find_optimum_batch_size(
@@ -209,6 +254,7 @@ def find_optimum_batch_size(
     dtype: mx.Dtype,
     compiled: bool = True,
     master_weights: bool = False,
+    async_eval: bool = True,
 ) -> int:
     if n_steps <= 0:
         raise ValueError("batch-size tuning steps must be positive")
@@ -228,6 +274,7 @@ def find_optimum_batch_size(
             batch_size,
             prefetch_batches,
             prefetch_workers,
+            drop_last=True,
         )
 
         optimizer = optimizer_fn()
@@ -239,26 +286,23 @@ def find_optimum_batch_size(
             master_weights=master_weights,
         )
         model.train()
-        state = [model.state, optimizer.state]
+        state = [model.state, optimizer.state, mx.random.state]
 
         # Pay the first-use compilation and allocation costs before measuring.
-        for inputs, targets in islice(dataloader, 2):
-            loss = step(inputs, targets)
-            mx.eval(loss, state)
+        for _ in iter_gpt2_train_steps(
+            step, islice(dataloader, 2), state, async_eval=async_eval
+        ):
+            pass
         dataloader.reset()
         mx.reset_peak_memory()
 
         time_start_train = perf_counter_ns()
         tokens_train = 0
         actual_steps = 0
-        for inputs, targets in islice(dataloader, n_steps):
-            # The final short sample has a different shape and would compile
-            # another graph; it is not representative of the steady-state batch.
-            if inputs.shape != (batch_size, sequence_len):
-                continue
-            loss = step(inputs, targets)
-            mx.eval(loss, state)
-            tokens_train += inputs.size
+        for _, tokens in iter_gpt2_train_steps(
+            step, islice(dataloader, n_steps), state, async_eval=async_eval
+        ):
+            tokens_train += tokens
             actual_steps += 1
 
         time_end_train = perf_counter_ns()
