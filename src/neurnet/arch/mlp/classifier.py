@@ -4,8 +4,8 @@ import mlx.core as mx
 from mlx import nn
 from mlx.optimizers import Optimizer
 
+from neurnet.datasets import MLXDataLoader
 from neurnet.nn import Flatten, MLXLossFunction
-from neurnet.utils.data import MLXDataLoader
 
 
 class MLPClassifier(nn.Module):

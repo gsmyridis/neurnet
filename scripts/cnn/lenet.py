@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10
 
 from neurnet.arch.cnn import LeNet, test_lenet, train_lenet
-from neurnet.serde import deserialise_torch_model, serialize_torch_model
 from neurnet.utils.image import show_feature_maps, show_image
+from neurnet.utils.serde import deserialise_torch_model, serialize_torch_model
 
 # ===-----------------------------------------------------------------------===
 # Constants

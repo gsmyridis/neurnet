@@ -16,8 +16,8 @@ from torchvision import datasets
 from torchvision.models import AlexNet_Weights
 
 from neurnet.arch.cnn import AlexNet
+from neurnet.datasets import SizedTorchDataLoader
 from neurnet.device import get_torch_device
-from neurnet.utils.data import SizedTorchDataLoader
 from neurnet.utils.serde import serialize_torch_model
 
 # ===-----------------------------------------------------------------------===

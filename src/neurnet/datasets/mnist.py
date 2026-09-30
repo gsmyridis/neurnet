@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import mlx.core as mx
 from mlx.data.datasets import load_mnist
 
-from neurnet.utils.data import Dataset, MLXDataLoader
+from .types import Dataset, MLXDataLoader
 
 MNIST_N_CLASSES = 10
 MNIST_IMAGE_DIMS = (28, 28)

@@ -16,8 +16,8 @@ from tqdm import tqdm
 from neurnet.arch.llm.config import LanguageModelConfig
 from neurnet.arch.llm.kv_cache import KVCacheMLX, LayerCacheMLX, fixed_cache_capacity
 from neurnet.arch.llm.types import LanguageModelMLX
+from neurnet.datasets import MLXDataLoader
 from neurnet.nn import MLXLossFunction, normal_like
-from neurnet.utils.data import MLXDataLoader
 
 from .config import GPT2_CONFIG_124M, GPT2ModelType
 

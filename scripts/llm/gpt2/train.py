@@ -20,11 +20,10 @@ from neurnet.arch.llm.models.gpt2 import (
     train_gpt2,
 )
 from neurnet.arch.llm.types import Tokenizer
-from neurnet.datasets import TinyShakespeareDataset
+from neurnet.datasets import MLXDataLoader, TinyShakespeareDataset
 from neurnet.device import Device
 from neurnet.nn import MLXLossFunction
 from neurnet.utils import print_header
-from neurnet.utils.data import MLXDataLoader
 
 NANOS_IN_SEC = 1e9
 HEADER_WIDTH = 120

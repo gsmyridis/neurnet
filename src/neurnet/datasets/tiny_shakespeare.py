@@ -4,8 +4,8 @@ from urllib.request import urlretrieve
 import mlx.core as mx
 
 from neurnet.arch.llm import Tokenizer
-from neurnet.utils.data import Dataset, MLXDataLoader
 
+from .types import Dataset, MLXDataLoader
 from .utils import text_file_to_buffer_mlx
 
 

@@ -7,8 +7,8 @@ from mlx import nn
 from mlx.optimizers import Optimizer
 
 from neurnet.arch.mlp import MLPClassifier
+from neurnet.datasets import MLXDataLoader
 from neurnet.nn import MLXLossFunction
-from neurnet.utils.data import MLXDataLoader
 
 
 class EnergyClassifier(MLPClassifier):

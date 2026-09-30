@@ -15,7 +15,7 @@ from neurnet.arch.llm.models.gpt2.mlx import (
     make_gpt2_train_step,
     train_gpt2,
 )
-from neurnet.utils.data import MLXDataLoader
+from neurnet.datasets import MLXDataLoader
 
 
 class _Batches(MLXDataLoader):
