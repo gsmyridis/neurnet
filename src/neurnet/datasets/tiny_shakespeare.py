@@ -2,7 +2,6 @@ from pathlib import Path
 from urllib.request import urlretrieve
 
 import mlx.core as mx
-from mlx.data import Stream
 
 from neurnet.arch.llm import Tokenizer
 from neurnet.utils.data import Dataset, MLXDataLoader
@@ -97,5 +96,5 @@ class TinyShakespeareMLXDataLoader(MLXDataLoader):
         next_sample = next(self._stream)
         return mx.array(next_sample["inputs"]), mx.array(next_sample["targets"])
 
-    def stream(self) -> Stream:
+    def stream(self):
         return self._stream

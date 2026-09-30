@@ -7,6 +7,10 @@ from mlx.data.datasets import load_mnist
 
 from neurnet.utils.data import Dataset, MLXDataLoader
 
+MNIST_N_CLASSES = 10
+MNIST_IMAGE_DIMS = (28, 28)
+MNIST_IMAGE_SIZE = MNIST_IMAGE_DIMS[0] * MNIST_IMAGE_DIMS[1]
+
 
 @dataclass(frozen=True)
 class MNISTDataset(Dataset):
@@ -14,6 +18,14 @@ class MNISTDataset(Dataset):
     root_dir: str
     shuffle: bool
     batch_size: int
+
+    @staticmethod
+    def image_dims() -> tuple[int, int]:
+        return MNIST_IMAGE_DIMS
+
+    @staticmethod
+    def n_classes() -> int:
+        return MNIST_N_CLASSES
 
     def to_mlx(
         self,
@@ -46,7 +58,7 @@ class MNISTMLXDataLoader(MLXDataLoader):
 
         self._stream = (
             buffer.to_stream()
-            .key_transform("image", lambda x: x.astype("float32").reshape(-1))
+            .key_transform("image", lambda x: x.astype("float32").reshape(-1) / 255.0)
             .batch(batch_size)
             .prefetch(prefetch_batches, prefetch_worker_threads)
         )

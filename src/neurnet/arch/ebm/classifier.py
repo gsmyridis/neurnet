@@ -1,54 +1,51 @@
+"""A class-conditional energy model for MNIST classification."""
+
 from typing import cast
 
 import mlx.core as mx
 from mlx import nn
 from mlx.optimizers import Optimizer
 
-from neurnet.nn import Flatten, MLXLossFunction
+from neurnet.arch.mlp import MLPClassifier
+from neurnet.nn import MLXLossFunction
 from neurnet.utils.data import MLXDataLoader
 
 
-class MLPClassifier(nn.Module):
-    def __init__(self, input_dims: int, n_classes: int, hidden_dims: int):
-        super().__init__()
-        if input_dims <= 0 or n_classes <= 1 or hidden_dims <= 0:
-            raise ValueError(
-                "input_dims and hidden_dims must be positive; n_classes > 1"
-            )
+class EnergyClassifier(MLPClassifier):
+    """Interpret negative class logits as conditional energies."""
 
-        self.image_encoder = nn.Sequential(
-            # Start from axis=1 to preserve the barch dimension.
-            # e.g. (B, 28, 28, 1) -> (B, 784)
-            Flatten(start_axis=1),
-            nn.Linear(input_dims, hidden_dims),
-            nn.ReLU(),
-        )
-        self.classifier_head = nn.Sequential(
-            nn.Linear(hidden_dims, hidden_dims),
-            nn.ReLU(),
-            nn.Linear(hidden_dims, n_classes),
-        )
+    def __init__(self, input_dims: int, n_classes: int, hidden_dims: int):
+        super().__init__(input_dims, n_classes, hidden_dims)
+        self.n_classes = n_classes
 
     def __call__(self, images: mx.array) -> mx.array:
-        """Return class logits with shape (batch_size, n_classes)."""
-        return self.classifier_head(self.image_encoder(images))
+        """Return energies with shape (batch_size, n_classes)."""
+        return -super().__call__(images)
+
+    def energy(self, images: mx.array, labels: mx.array) -> mx.array:
+        """Return the energy of each image paired with its supplied label."""
+        return mx.squeeze(
+            mx.take_along_axis(self(images), labels[:, None], axis=1), axis=1
+        )
 
     def predict(self, images: mx.array) -> mx.array:
-        return mx.argmax(self(images), axis=1)
+        return mx.argmin(self(images), axis=1)
 
 
-def train_mlp_classifier(
-    model: MLPClassifier,
+def train_energy_classifier(
+    model: EnergyClassifier,
     train_loader: MLXDataLoader,
     test_loader: MLXDataLoader,
     optimizer: Optimizer,
     loss_function: MLXLossFunction,
     epochs: int,
-) -> MLPClassifier:
+) -> EnergyClassifier:
     if epochs <= 0:
         raise ValueError("epochs must be positive")
 
-    def loss_fn(model: MLPClassifier, images: mx.array, targets: mx.array) -> mx.array:
+    def loss_fn(
+        model: EnergyClassifier, images: mx.array, targets: mx.array
+    ) -> mx.array:
         return loss_function(model(images), targets)
 
     loss_and_grad = nn.value_and_grad(model, loss_fn)
@@ -60,13 +57,15 @@ def train_mlp_classifier(
             optimizer.update(model, grads)
             mx.eval(model.parameters(), optimizer.state)
 
-        accuracy = test_mlp_classifier(model, test_loader)
+        accuracy = test_energy_classifier(model, test_loader)
         print(f"[Epoch {epoch + 1} / {epochs}]: Test accuracy {accuracy:.2%}")
 
     return model
 
 
-def test_mlp_classifier(model: MLPClassifier, test_loader: MLXDataLoader) -> float:
+def test_energy_classifier(
+    model: EnergyClassifier, test_loader: MLXDataLoader
+) -> float:
     model.eval()
     test_loader.reset()
 

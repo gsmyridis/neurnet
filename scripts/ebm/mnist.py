@@ -1,15 +1,14 @@
 import argparse
+from functools import partial
 
-import mlx.core as mx
-from mlx import nn
 from mlx.optimizers import Adam
 
-from neurnet.arch.mlp import MLPClassifier, train_mlp_classifier
+from neurnet.arch.ebm import (
+    EnergyClassifier,
+    train_energy_classifier,
+)
 from neurnet.datasets import MNIST_IMAGE_SIZE, MNIST_N_CLASSES, MNISTDataset
-
-
-def classification_loss(predictions: mx.array, labels: mx.array) -> mx.array:
-    return mx.mean(nn.losses.cross_entropy(predictions, labels))
+from neurnet.nn.loss import hinge_loss, negative_log_likelihood, perceptron_loss
 
 
 def main() -> None:
@@ -18,12 +17,23 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=5)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
+    parser.add_argument("--loss", choices=("nll", "perceptron", "hinge"), default="nll")
+    parser.add_argument("--margin", type=float, default=1.0, help="Hinge margin")
     args = parser.parse_args()
 
     if args.batch_size <= 0 or args.learning_rate <= 0:
         parser.error("batch size and learning rate must be positive")
     if args.epochs <= 0:
         parser.error("epochs must be positive")
+    if args.margin < 0:
+        parser.error("margin must be nonnegative")
+
+    if args.loss == "hinge":
+        loss_function = partial(hinge_loss, margin=args.margin)
+    elif args.loss == "perceptron":
+        loss_function = perceptron_loss
+    else:
+        loss_function = negative_log_likelihood
 
     train_loader = MNISTDataset(
         train=True,
@@ -38,17 +48,17 @@ def main() -> None:
         batch_size=args.batch_size,
     ).to_mlx(prefetch_batches=4, prefetch_worker_threads=2)
 
-    model = MLPClassifier(
+    model = EnergyClassifier(
         input_dims=MNIST_IMAGE_SIZE,
         n_classes=MNIST_N_CLASSES,
         hidden_dims=MNIST_IMAGE_SIZE // 2,
     )
-    train_mlp_classifier(
+    train_energy_classifier(
         model=model,
         train_loader=train_loader,
         test_loader=test_loader,
         optimizer=Adam(learning_rate=args.learning_rate),
-        loss_function=classification_loss,
+        loss_function=loss_function,
         epochs=args.epochs,
     )
 

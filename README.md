@@ -16,12 +16,42 @@ The experiments that have been carried out are grouped by architecture.
 | -------------- | --------- | ------- | ------------------------------------------------------ |
 | MLP Classifier | MLX       | MNIST   | Trained and evaluated a simple multi-layer perceptron. |
 
+Run the MLP with the same batch size, learning rate, epoch count, and hidden
+width as the MNIST energy model:
+
+```bash
+uv run -m scripts.mlp.mnist --epochs 5
+```
+
 ## CNN
 
 | Model   | Framework | Dataset                                                                              | Comments                                                                        |
 | ------- | --------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
 | LeNet   | PyTorch   | CIFAR-10                                                                             | • Trained and evaluated the model.<br>• Inspected its feature maps.             |
 | AlexNet | PyTorch   | [Kaggle Hymenoptera Data](https://www.kaggle.com/datasets/ajayrana/hymenoptera-data) | • Fine-tuned an ImageNet-pretrained model.<br>• Demonstrated transfer learning. |
+
+## Energy-based model
+
+The MLX MNIST energy classifier uses the same ten-output network as the MLP,
+interpreting each energy as the negative of a class logit. Inference selects the
+label with the lowest energy. The training loss can be chosen independently:
+
+| `--loss` | Per-example objective, where `y` is correct and `E_j` is class `j`'s energy |
+| --- | --- |
+| `nll` (default) | `E_y + log(sum_j exp(-E_j))` |
+| `perceptron` | `E_y - min_j E_j` |
+| `hinge` | `max(0, margin + E_y - min_{j != y} E_j)` |
+
+These are the multiclass forms described in [A Tutorial on Energy-Based
+Learning](https://yann.lecun.org/exdb/publis/pdf/lecun-06.pdf). The perceptron
+loss enforces no margin, so tied energies can give zero loss. `--margin` controls
+the hinge gap and defaults to 1.0.
+
+```bash
+uv run -m scripts.ebm.mnist --loss nll --epochs 5
+uv run -m scripts.ebm.mnist --loss perceptron --epochs 5
+uv run -m scripts.ebm.mnist --loss hinge --margin 1.0 --epochs 5
+```
 
 ## LLM
 
