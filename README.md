@@ -53,6 +53,14 @@ uv run -m scripts.ebm.mnist --loss perceptron --epochs 5
 uv run -m scripts.ebm.mnist --loss hinge --margin 1.0 --epochs 5
 ```
 
+The RBM-style MNIST energy model uses a contrastive margin loss: data images
+should receive lower energy than Gaussian-corrupted versions. It ranks these
+examples directly without fitting normalized probabilities.
+
+```bash
+uv run -m scripts.ebm.rbm_mnist --epochs 5 --margin 1.0 --corruption-std 0.3
+```
+
 ## LLM
 
 | Model | Framework | Dataset          | Comments               |

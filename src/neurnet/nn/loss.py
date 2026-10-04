@@ -39,3 +39,14 @@ def hinge_loss(energies: mx.array, labels: mx.array, margin: float = 1.0) -> mx.
 def negative_log_likelihood(energies: mx.array, labels: mx.array) -> mx.array:
     """Exact conditional NLL over the finite set of classes."""
     return mx.mean(nn.losses.cross_entropy(-energies, labels))
+
+
+def contrastive_energy_loss(
+    positive_energies: mx.array,
+    negative_energies: mx.array,
+    margin: float = 1.0,
+) -> mx.array:
+    """Push negative examples at least ``margin`` above positive examples."""
+    if margin < 0:
+        raise ValueError("margin must be nonnegative")
+    return mx.mean(mx.maximum(margin + positive_energies - negative_energies, 0))
