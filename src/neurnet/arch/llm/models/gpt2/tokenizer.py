@@ -29,8 +29,7 @@ class GPT2Tokenizer(Tokenizer):
         del model_type, cache_dir
         return cls(tiktoken.get_encoding(cls._ENCODING_NAME))
 
-    @property
-    def eos_token_id(self) -> int | None:
+    def end_of_sequence_token_id(self) -> int:
         return self._encoding.eot_token
 
     def encode(self, text: str) -> list[int]:

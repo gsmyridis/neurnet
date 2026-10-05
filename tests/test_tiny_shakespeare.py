@@ -11,6 +11,9 @@ class _SequentialTokenizer(Tokenizer):
     def __init__(self, num_tokens: int) -> None:
         self._num_tokens = num_tokens
 
+    def end_of_sequence_token_id(self) -> int:
+        return 0
+
     def encode(self, text: str) -> Sequence[int]:
         return list(range(self._num_tokens))
 

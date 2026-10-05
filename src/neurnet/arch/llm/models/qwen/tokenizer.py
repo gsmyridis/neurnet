@@ -53,6 +53,10 @@ class Qwen3Tokenizer(Tokenizer):
             self.eos_token = "<|im_end|>"
         self.eos_token_id = self._special_to_id.get(self.eos_token)
 
+    def end_of_sequence_token_id(self) -> int:
+        assert self.eos_token_id is not None
+        return self.eos_token_id
+
     def encode(self, text: str) -> Sequence[int]:
         stripped = text.strip()
         if stripped in self._special_to_id and "\n" not in stripped:

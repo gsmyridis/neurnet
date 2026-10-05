@@ -14,6 +14,10 @@ type TensorType = torch.Tensor | mx.array
 
 class Tokenizer(ABC):
     @abstractmethod
+    def end_of_sequence_token_id(self) -> int:
+        raise NotImplementedError("'end_of_sequence_token_id' is not implemented")
+
+    @abstractmethod
     def encode(self, text: str) -> Sequence[int]:
         raise NotImplementedError("'encode' is not implemented")
 

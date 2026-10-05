@@ -6,6 +6,9 @@ from neurnet.datasets.utils import text_to_buffer_mlx, tokens_to_buffer_mlx
 
 
 class _SequentialTokenizer(Tokenizer):
+    def end_of_sequence_token_id(self) -> int:
+        return 0
+
     def encode(self, text: str) -> Sequence[int]:
         return list(range(518))
 

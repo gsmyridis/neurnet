@@ -14,7 +14,7 @@ class GPT2TokenizerTests(unittest.TestCase):
         tokenizer = GPT2Tokenizer(encoding)
 
         self.assertIsInstance(tokenizer, Tokenizer)
-        self.assertEqual(tokenizer.eos_token_id, 50_256)
+        self.assertEqual(tokenizer.end_of_sequence_token_id(), 50_256)
         self.assertEqual(tokenizer.encode("Hello"), [1, 2])
         self.assertEqual(tokenizer.decode((1, 2)), "Hello")
         encoding.encode.assert_called_once_with(

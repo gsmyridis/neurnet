@@ -1,3 +1,7 @@
+import shutil
+import tempfile
+import urllib.request
+import zipfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -6,6 +10,10 @@ import mlx.data as dx
 from mlx.data import Buffer
 
 from neurnet.arch.llm.types import Tokenizer
+
+# ===--------------------------------------------------------------------------===
+# Text to buffer of tokens
+# ===--------------------------------------------------------------------------===
 
 
 def text_file_to_buffer_mlx(
@@ -95,3 +103,52 @@ def tokens_to_buffer_mlx(
         buffer = buffer.shuffle()
 
     return buffer
+
+
+# ===--------------------------------------------------------------------------===
+# Download and unzip file from URL
+# ===--------------------------------------------------------------------------===
+
+
+def download_unzip(
+    url: str,
+    root_dir: str | Path,
+    extracted_path: str | Path,
+) -> Path:
+    """Download a zip and extract it under ``root_dir / extracted_path``.
+
+    The archive's internal directory structure is preserved. For example, a
+    flat archive extracted with ``root_dir="data"`` and
+    ``extracted_path="smm_spam_collection"`` places its files in
+    ``data/smm_spam_collection``.
+
+    If the destination directory already exists, it is returned without
+    downloading the archive again.
+    """
+    destination = Path(root_dir) / extracted_path
+    if destination.exists():
+        if destination.is_dir():
+            return destination
+        raise FileExistsError(
+            f"Extraction destination is not a directory: {destination}"
+        )
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    # Download and extract in a temporary directory, then move the completed
+    # contents into place so a failed download does not leave a partial target.
+    with tempfile.TemporaryDirectory(dir=destination.parent) as temporary_dir:
+        temporary_path = Path(temporary_dir)
+        zip_path = temporary_path / "download.zip"
+        staging_path = temporary_path / "contents"
+        staging_path.mkdir()
+
+        with urllib.request.urlopen(url) as response, zip_path.open("wb") as out_file:
+            shutil.copyfileobj(response, out_file)
+
+        with zipfile.ZipFile(zip_path, "r") as zip_ref:
+            zip_ref.extractall(staging_path)
+
+        staging_path.rename(destination)
+
+    return destination

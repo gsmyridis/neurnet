@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 
 import mlx.core as mx
 from mlx.data.datasets import load_mnist
@@ -26,6 +28,15 @@ class MNISTDataset(Dataset):
     @staticmethod
     def n_classes() -> int:
         return MNIST_N_CLASSES
+
+    def download_path(self) -> Path:
+        return Path(self.root_dir) / "msist" / str(self.train)
+
+    def download(self) -> Path:
+        path = self.download_path()
+        os.makedirs(path, exist_ok=True)
+        _ = load_mnist(train=self.train, root=path)
+        return path
 
     def to_mlx(
         self,

@@ -446,6 +446,9 @@ class _TestTokenizer(Tokenizer):
         self._encoded_prompt = encoded_prompt
         self._decoded_tokens = decoded_tokens
 
+    def end_of_sequence_token_id(self) -> int:
+        return 0
+
     def encode(self, text: str) -> list[int]:
         return self._encoded_prompt
 
@@ -454,6 +457,9 @@ class _TestTokenizer(Tokenizer):
 
 
 class _ByteFragmentTokenizer(Tokenizer):
+    def end_of_sequence_token_id(self) -> int:
+        return 0
+
     def encode(self, text: str) -> list[int]:
         return [1]
 

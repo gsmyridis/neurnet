@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Self
 
 import mlx.core as mx
@@ -14,6 +15,11 @@ import torch
 
 
 class Dataset(ABC):
+    @abstractmethod
+    def download() -> Path:
+        """Downloads the dataset and returns its path."""
+        raise NotImplementedError("'download' is not implemented.")
+
     def to_mlx(
         self,
         prefetch_batches: int,
