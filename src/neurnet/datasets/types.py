@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,7 +15,6 @@ import torch
 
 
 class Dataset(ABC):
-    @abstractmethod
     def download() -> Path:
         """Downloads the dataset and returns its path."""
         raise NotImplementedError("'download' is not implemented.")
@@ -39,6 +38,9 @@ class Dataset(ABC):
 
 
 class MLXDataLoader(Iterator, Iterable):
+    def __len__(self) -> int:
+        raise NotImplementedError("'__len__' has not been implemented.")
+
     def __iter__(self) -> Self:
         return self
 

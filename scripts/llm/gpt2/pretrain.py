@@ -23,50 +23,28 @@ from neurnet.arch.llm.types import Tokenizer
 from neurnet.datasets import MLXDataLoader, TinyShakespeareDataset
 from neurnet.device import Device
 from neurnet.nn import MLXLossFunction
-from neurnet.utils import print_header
+from neurnet.utils.fmt import print_header
 
 NANOS_IN_SEC = 1e9
 HEADER_WIDTH = 120
 
 
 def build_parser() -> argparse.ArgumentParser:
-    DEFAULT_SEQUENCE_LENGTH = 256
-    DEFAULT_BATCH_SIZE: int | None = None
-    DEFAULT_BATCH_SIZE_TUNING_TRAINING_STEPS = 10
-    DEFAULT_BATCH_SIZE_TUNING_MAX_EXPONENT = 5
-    DEFAULT_LEARNING_RATE = 3e-4
-    DEFAULT_PREFETCH_BATCHES = 64
-    DEFAULT_PREFETCH_WORKERS = 4
-    DEFAULT_SEED = 42
-    DEFAULT_EPOCHS = 50
-
     parser = argparse.ArgumentParser(description="Train GPT-2 on Tiny Shakespeare.")
-    parser.add_argument("--sequence-length", type=int, default=DEFAULT_SEQUENCE_LENGTH)
+    parser.add_argument("--sequence-length", type=int, default=256)
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=DEFAULT_BATCH_SIZE,
+        default=None,
         help="Training batch size. Omit to tune for the best size.",
     )
-    parser.add_argument(
-        "--batch-size-tuning-training-steps",
-        type=int,
-        default=DEFAULT_BATCH_SIZE_TUNING_TRAINING_STEPS,
-    )
-    parser.add_argument(
-        "--batch-size-tuning-max-exponent",
-        type=int,
-        default=DEFAULT_BATCH_SIZE_TUNING_MAX_EXPONENT,
-    )
-    parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
-    parser.add_argument(
-        "--prefetch-batches", type=int, default=DEFAULT_PREFETCH_BATCHES
-    )
-    parser.add_argument(
-        "--prefetch-workers", type=int, default=DEFAULT_PREFETCH_WORKERS
-    )
-    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    parser.add_argument("--epochs", type=int, default=DEFAULT_EPOCHS)
+    parser.add_argument("--batch-size-tuning-training-steps", type=int, default=10)
+    parser.add_argument("--batch-size-tuning-max-exponent", type=int, default=5)
+    parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--prefetch-batches", type=int, default=64)
+    parser.add_argument("--prefetch-workers", type=int, default=4)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument(
         "--dtype",
         choices=("float32", "bfloat16", "mixed"),

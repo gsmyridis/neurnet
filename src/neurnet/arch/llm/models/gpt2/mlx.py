@@ -93,13 +93,13 @@ class GPT2MLXModel(LanguageModelMLX):
             raise ValueError("GPT-2 context length exceeded")
 
         decode = self._compiled_decode or self._decode_one
-        logits, layers, position = decode(indices, cache.layers, cache.position)
+        hidden, layers, position = decode(indices, cache.layers, cache.position)
         cache.layers = layers
         cache.position = position
         cache.offset += 1
-        mx.eval(logits, cache.layers, cache.position)
+        mx.eval(hidden, cache.layers, cache.position)
 
-        return logits
+        return hidden
 
     def compile(self) -> Self:
         """Compile uncached inference and the stable-shape one-token decoder."""
