@@ -36,11 +36,11 @@ The MLX MNIST energy classifier uses the same ten-output network as the MLP,
 interpreting each energy as the negative of a class logit. Inference selects the
 label with the lowest energy. The training loss can be chosen independently:
 
-| `--loss` | Per-example objective, where `y` is correct and `E_j` is class `j`'s energy |
-| --- | --- |
-| `nll` (default) | `E_y + log(sum_j exp(-E_j))` |
-| `perceptron` | `E_y - min_j E_j` |
-| `hinge` | `max(0, margin + E_y - min_{j != y} E_j)` |
+| `--loss`        | Per-example objective, where `y` is correct and `E_j` is class `j`'s energy |
+| --------------- | --------------------------------------------------------------------------- |
+| `nll` (default) | `E_y + log(sum_j exp(-E_j))`                                                |
+| `perceptron`    | `E_y - min_j E_j`                                                           |
+| `hinge`         | `max(0, margin + E_y - min_{j != y} E_j)`                                   |
 
 These are the multiclass forms described in [A Tutorial on Energy-Based
 Learning](https://yann.lecun.org/exdb/publis/pdf/lecun-06.pdf). The perceptron
@@ -63,10 +63,11 @@ uv run -m scripts.ebm.rbm_mnist --epochs 5 --margin 1.0 --corruption-std 0.3
 
 ## LLM
 
-| Model | Framework | Dataset          | Comments               |
-| ----- | --------- | ---------------- | ---------------------- |
-| GPT-2 | MLX       | Tiny Shakespeare | Training and inference |
-| Qwen3 | PyTorch   | —                | Inference              |
+| Model            | Framework | Dataset             | Comments                             |
+| ---------------- | --------- | ------------------- | ------------------------------------ |
+| GPT-2            | MLX       | Tiny Shakespeare    | Training and inference with KV Cache |
+| GPT-2 classifier | MLX       | SMS Spam Collection | Fine-tuning                          |
+| Qwen3            | PyTorch   | —                   | Inference                            |
 
 ### Generation policies
 
@@ -130,6 +131,25 @@ Add `--save-path models/gpt2/shakespeare.safetensors` to save the model weights
 after training. Both `.safetensors` and `.npz` are supported, and parent
 directories are created automatically. This saves model weights only, without
 optimizer state. Omit the option to skip saving.
+
+### Fine-tuning
+
+Fine-tune GPT-2 for binary spam classification using the SMS Spam Collection:
+
+```bash
+uv run -m scripts.llm.gpt2.finetune_classification
+```
+
+The default `--fine-tune last-layer` trains the classification head, final
+transformer block, and final layer norm. Choose `head` to train only the
+classification head, or `full` to train the whole model. The data split defaults
+to 80% training, 10% validation, and 10% testing; set `--train-fraction`,
+`--validation-fraction`, and `--test-fraction` to change it. Each epoch reports
+training and validation loss and accuracy. After training, the script reports
+test loss and accuracy and plots them as red reference lines against the
+training and validation curves.
+
+Instruction tuning will be added to this fine-tuning section later.
 
 Use the chat CLI above for generation. Inspect GPT-2 parameters separately with:
 
