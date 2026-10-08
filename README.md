@@ -23,6 +23,18 @@ width as the MNIST energy model:
 uv run -m scripts.mlp.mnist --epochs 5
 ```
 
+## Mixture Density Network
+
+Fit a simple MLX network to synthetic `y = +/- sin(x) + noise` data. The network
+predicts Gaussian mixture weights, means, and scales, trained with negative
+log-likelihood. The resulting density plot shows both possible outputs per input.
+No dataset download is needed.
+
+```bash
+uv run -m scripts.mlp.mdn
+uv run -m scripts.mlp.mdn --no-show --save-plot assets/mdn.png
+```
+
 ## CNN
 
 | Model   | Framework | Dataset                                                                              | Comments                                                                        |

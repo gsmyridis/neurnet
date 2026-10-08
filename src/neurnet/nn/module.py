@@ -17,7 +17,7 @@ class ModuleList(nn.Module):
 
 
 class Flatten(nn.Module):
-    def __init__(self, start_axis: int):
+    def __init__(self, start_axis: int = 0):
         super().__init__()
         self.start_axis = start_axis
 
