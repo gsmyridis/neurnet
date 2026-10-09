@@ -15,7 +15,7 @@ import torch
 
 
 class Dataset(ABC):
-    def download() -> Path:
+    def download(self) -> Path:
         """Downloads the dataset and returns its path."""
         raise NotImplementedError("'download' is not implemented.")
 

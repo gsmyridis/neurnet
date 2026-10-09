@@ -5,7 +5,7 @@ import argparse
 from mlx.optimizers import Adam
 
 from neurnet.arch.ebm import RestrictedBoltzmannMachine, train_rbm
-from neurnet.datasets import MNIST_IMAGE_SIZE, MNISTDataset
+from neurnet.datasets import MNISTDataset
 
 
 def main() -> None:
@@ -42,7 +42,7 @@ def main() -> None:
     ).to_mlx(prefetch_batches=4, prefetch_worker_threads=2)
 
     model = RestrictedBoltzmannMachine(
-        visible_units=MNIST_IMAGE_SIZE,
+        visible_units=MNISTDataset.IMAGE_SIZE,
         hidden_units=args.hidden_units,
     )
     train_rbm(

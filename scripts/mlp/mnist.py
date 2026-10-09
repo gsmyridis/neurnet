@@ -5,7 +5,7 @@ from mlx import nn
 from mlx.optimizers import Adam
 
 from neurnet.arch.mlp import MLPClassifier, train_mlp_classifier
-from neurnet.datasets import MNIST_IMAGE_SIZE, MNIST_N_CLASSES, MNISTDataset
+from neurnet.datasets import MNISTDataset
 
 
 def classification_loss(predictions: mx.array, labels: mx.array) -> mx.array:
@@ -39,9 +39,9 @@ def main() -> None:
     ).to_mlx(prefetch_batches=4, prefetch_worker_threads=2)
 
     model = MLPClassifier(
-        input_dims=MNIST_IMAGE_SIZE,
-        n_classes=MNIST_N_CLASSES,
-        hidden_dims=MNIST_IMAGE_SIZE // 2,
+        input_dims=MNISTDataset.IMAGE_SIZE,
+        n_classes=MNISTDataset.N_CLASSES,
+        hidden_dims=MNISTDataset.IMAGE_SIZE // 2,
     )
     train_mlp_classifier(
         model=model,

@@ -6,13 +6,13 @@ from pathlib import Path
 from typing import ClassVar
 
 import mlx.core as mx
-from mlx.data.datasets import load_mnist
+from mlx.data.datasets import load_fashion_mnist
 
 from .types import Dataset, MLXDataLoader
 
 
 @dataclass(frozen=True)
-class MNISTDataset(Dataset):
+class FashionMNISTDataset(Dataset):
     N_CLASSES: ClassVar[int] = 10
     IMAGE_DIMS: ClassVar[tuple[int, int]] = (28, 28)
     IMAGE_SIZE: ClassVar[int] = IMAGE_DIMS[0] * IMAGE_DIMS[1]
@@ -24,29 +24,29 @@ class MNISTDataset(Dataset):
 
     @staticmethod
     def image_dims() -> tuple[int, int]:
-        return MNISTDataset.IMAGE_DIMS
+        return FashionMNISTDataset.IMAGE_DIMS
 
     @staticmethod
     def n_classes() -> int:
-        return MNISTDataset.N_CLASSES
+        return FashionMNISTDataset.N_CLASSES
 
     def download_path(self) -> Path:
-        return Path(self.root_dir) / "msist" / str(self.train)
+        return Path(self.root_dir) / "fashion_mnist"
 
     def download(self) -> Path:
         path = self.download_path()
         os.makedirs(path, exist_ok=True)
-        _ = load_mnist(train=self.train, root=path)
+        _ = load_fashion_mnist(train=self.train, root=path)
         return path
 
     def to_mlx(
         self,
         prefetch_batches: int,
         prefetch_worker_threads: int,
-    ) -> MNISTMLXDataLoader:
-        return MNISTMLXDataLoader(
+    ) -> FashionMNISTMLXDataLoader:
+        return FashionMNISTMLXDataLoader(
             train=self.train,
-            root_dir=self.root_dir,
+            root_dir=str(self.download_path()),
             shuffle=self.shuffle,
             batch_size=self.batch_size,
             prefetch_batches=prefetch_batches,
@@ -54,7 +54,7 @@ class MNISTDataset(Dataset):
         )
 
 
-class MNISTMLXDataLoader(MLXDataLoader):
+class FashionMNISTMLXDataLoader(MLXDataLoader):
     def __init__(
         self,
         root_dir: str,
@@ -64,7 +64,7 @@ class MNISTMLXDataLoader(MLXDataLoader):
         prefetch_batches: int = 4,
         prefetch_worker_threads: int = 2,
     ):
-        buffer = load_mnist(train=train, root=root_dir)
+        buffer = load_fashion_mnist(train=train, root=root_dir)
         if shuffle:
             buffer = buffer.shuffle()
 
